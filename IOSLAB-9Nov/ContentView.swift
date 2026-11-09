@@ -22,9 +22,9 @@ private struct AndamiajeView: View {
         NavigationStack {
             List {
                 Section {
-                    Label(textoIA, systemImage: iaDisponible ? "checkmark.seal.fill" : "exclamationmark.triangle.fill")
-                        .foregroundStyle(iaDisponible ? Color.green : Color.orange)
-                        .font(.headline)
+                    Etiqueta(texto: textoIA,
+                             icono: iaDisponible ? "checkmark.seal.fill" : "exclamationmark.triangle.fill",
+                             color: iaDisponible ? Paleta.tomada : Paleta.sePaso)
                 }
                 Section(perfiles.first.map { "Medicamentos de \($0.nombre)" } ?? "Medicamentos") {
                     if medicamentos.isEmpty {

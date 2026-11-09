@@ -45,6 +45,8 @@ enum Registro {
         guard let (medID, programada) = partes(de: idToma) else { throw Fallo.idInvalido(idToma) }
         let r: RegistroToma
         if let existente = registro(idToma: idToma, contexto: contexto) {
+            // Ya estaba tomada (p. ej. botón y luego intent): se conserva la primera hora.
+            if existente.estado == .tomada && estado == .tomada { return existente }
             existente.estado = estado
             existente.registrada = registrada
             r = existente

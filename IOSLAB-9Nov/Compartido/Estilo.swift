@@ -5,8 +5,9 @@ enum Paleta {
     /// Colores de medicamento con buen contraste sobre fondo claro y oscuro.
     static let medicamentos = ["#2563EB", "#DC2626", "#16A34A", "#9333EA", "#EA580C", "#0891B2"]
 
-    static let tomada = Color.green
-    static let sePaso = Color.orange
+    /// Tonos oscuros para los iconos de estado (el texto va en `.primary` para contraste AA).
+    static let tomada = Color(hex: "#15803D")
+    static let sePaso = Color(hex: "#C2410C")
     static let dudoso = Color.yellow.opacity(0.35)
     static let tarjeta = Color(.secondarySystemBackground)
     static let fondo = Color(.systemBackground)
@@ -107,10 +108,12 @@ struct Etiqueta: View {
     let color: Color
 
     var body: some View {
-        Label(texto, systemImage: icono)
-            .font(.headline)
-            .foregroundStyle(color)
-            .labelStyle(.titleAndIcon)
+        Label {
+            Text(texto).foregroundStyle(.primary)
+        } icon: {
+            Image(systemName: icono).foregroundStyle(color)
+        }
+        .font(.headline)
     }
 }
 
@@ -118,16 +121,15 @@ struct Etiqueta: View {
 struct MarcaDudoso: ViewModifier {
     let activo: Bool
     func body(content: Content) -> some View {
-        if activo {
-            VStack(alignment: .leading, spacing: 4) {
-                content
+        // Misma estructura siempre para no perder el estado del campo al alternar.
+        VStack(alignment: .leading, spacing: 4) {
+            content
+            if activo {
                 Label("Revisa esto", systemImage: "questionmark.circle").font(.subheadline.bold())
             }
-            .padding(8)
-            .background(Paleta.dudoso, in: RoundedRectangle(cornerRadius: 10))
-        } else {
-            content
         }
+        .padding(activo ? 8 : 0)
+        .background(activo ? Paleta.dudoso : Color.clear, in: RoundedRectangle(cornerRadius: 10))
     }
 }
 

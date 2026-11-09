@@ -37,7 +37,7 @@ nonisolated struct TomaProgramada: Identifiable, Hashable, Sendable {
         let f = DateFormatter()
         f.locale = Locale(identifier: "en_US_POSIX")
         f.calendar = Calendar(identifier: .gregorian)
-        f.timeZone = .current
+        f.timeZone = .autoupdatingCurrent
         f.dateFormat = "yyyyMMdd-HHmm"
         return f
     }()
@@ -63,7 +63,9 @@ enum Plan {
                 resultado.append(TomaProgramada(medicamentoID: med.id, fecha: fecha, momento: momento))
             }
         }
-        return resultado.sorted { $0.fecha < $1.fecha }
+        // Dos momentos a la misma hora darían el mismo id: se deja una sola toma.
+        var vistos = Set<String>()
+        return resultado.filter { vistos.insert($0.id).inserted }.sorted { $0.fecha < $1.fecha }
     }
 
     /// Todas las tomas de hoy de los medicamentos activos, ordenadas por hora.
