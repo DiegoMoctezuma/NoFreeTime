@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>NSAlarmKitUsageDescription</key>
+	<string>Para sonar una alarma a la hora de cada medicamento, aunque el iPhone esté en silencio.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Para tomarle foto a tu receta y a la caja de tus medicamentos. Las fotos se quedan en tu iPhone.</string>
+	<key>NSSupportsLiveActivities</key>
+	<true/>
+</dict>
+</plist>
