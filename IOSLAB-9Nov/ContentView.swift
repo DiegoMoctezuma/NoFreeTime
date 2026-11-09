@@ -17,6 +17,8 @@ private struct AndamiajeView: View {
     @Environment(\.modelContext) private var contexto
     @Query(sort: \Medicamento.nombre) private var medicamentos: [Medicamento]
     @Query private var perfiles: [Perfil]
+    @Query private var registros: [RegistroToma]
+    @Environment(Navegacion.self) private var navegacion
 
     var body: some View {
         NavigationStack {
@@ -42,6 +44,19 @@ private struct AndamiajeView: View {
                         }
                         .accessibilityElement(children: .combine)
                     }
+                }
+                Section("Pruebas en el iPhone") {
+                    NavigationLink("Probar lector de receta y caja (WP-01)") { PruebaLectorView() }
+                        .frame(minHeight: 44)
+                    NavigationLink("Probar avisos (WP-02)") {
+                        ComoTeAvisoView(medicamentos: medicamentos) {}
+                    }
+                    .frame(minHeight: 44)
+                    if let id = navegacion.tomaResaltada {
+                        Text("Última toma registrada desde un aviso: \(id.suffix(13))")
+                            .font(.footnote)
+                    }
+                    Text("Registros de toma: \(registros.count)").font(.footnote)
                 }
                 Section {
                     BotonGrande(titulo: "Cargar datos de ejemplo", icono: "tray.and.arrow.down") {
@@ -84,4 +99,5 @@ extension String {
 #Preview {
     ContentView()
         .modelContainer(Almacen.vistaPrevia())
+        .environment(Navegacion.compartida)
 }
