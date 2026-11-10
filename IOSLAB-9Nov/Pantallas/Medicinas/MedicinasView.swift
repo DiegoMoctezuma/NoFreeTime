@@ -32,11 +32,14 @@ struct SeccionMedicinas: View {
             ForEach(medicamentos) { med in
                 Button { elegido = med } label: { TarjetaMedicina(med: med) }
                     .buttonStyle(EstiloPresionable())
+                    .entradaMiMi(orden: 1)
+                    .transition(.opacity)
             }
         }
         .sheet(item: $elegido) { med in
             DetalleMedicinaView(med: med)
         }
+        .cambioMiMi(medicamentos.map(\.id))
     }
 }
 

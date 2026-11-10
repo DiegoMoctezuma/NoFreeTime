@@ -12,6 +12,7 @@ struct OnboardingView: View {
     }
 
     @Environment(\.modelContext) private var contexto
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
     @State private var paso: Paso = .hola
     @State private var avanzando = true
 
@@ -35,9 +36,7 @@ struct OnboardingView: View {
                 ScrollView {
                     contenido(alto: geo.size.height)
                         .id(paso)
-                        .transition(.asymmetric(
-                            insertion: .move(edge: avanzando ? .trailing : .leading).combined(with: .opacity),
-                            removal: .move(edge: avanzando ? .leading : .trailing).combined(with: .opacity)))
+                        .transition(MovimientoMiMi.pagina(adelante: avanzando, reducir: reducirMovimiento))
                         .padding(.horizontal, 24)
                         .padding(.vertical, 12)
                         .frame(minHeight: geo.size.height, alignment: .center)
@@ -291,7 +290,7 @@ struct OnboardingView: View {
     private func ir(_ nuevo: Paso, adelante: Bool = true) {
         dictado.detener()
         avanzando = adelante
-        withAnimation(.snappy(duration: 0.35)) { paso = nuevo }
+        withAnimation(reducirMovimiento ? nil : MovimientoMiMi.cambio) { paso = nuevo }
     }
 
     private func avanzar() async {

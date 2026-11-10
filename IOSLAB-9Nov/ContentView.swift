@@ -8,6 +8,7 @@ struct ContentView: View {
     @Query private var perfiles: [Perfil]
     @AppStorage(ClavesApp.altaTerminada) private var altaTerminada = false
     @Environment(Navegacion.self) private var navegacion
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
 
     var body: some View {
         Group {
@@ -25,6 +26,12 @@ struct ContentView: View {
         .tint(Paleta.tinta)
         .preferredColorScheme(.light)
         .tamanoLetraElegido()
+        .transaction { transaccion in
+            if reducirMovimiento {
+                transaccion.animation = nil
+                transaccion.disablesAnimations = true
+            }
+        }
     }
 }
 

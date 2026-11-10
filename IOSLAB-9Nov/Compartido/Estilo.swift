@@ -149,14 +149,16 @@ struct EtiquetaBoton: View {
 struct EstiloBotonGrande: ButtonStyle {
     let estilo: BotonGrande.Estilo
     @Environment(\.isEnabled) private var activo
+    @Environment(\.accessibilityReduceMotion) private var reducir
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .foregroundStyle(primerPlano)
             .background { fondo }
             .opacity(activo ? 1 : 0.35)
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reducir ? 0.97 : 1)
+            .brightness(configuration.isPressed ? -0.04 : 0)
+            .animation(reducir ? nil : MovimientoMiMi.respuesta, value: configuration.isPressed)
     }
 
     private var primerPlano: Color {
@@ -249,6 +251,7 @@ struct PantallaPregunta<Contenido: View, Botones: View>: View {
                     }
                 }
                 contenido
+                    .entradaMiMi(orden: 1)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.horizontal, 24)
@@ -291,6 +294,7 @@ struct IndicadorPaso: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Paso \(actual) de \(total)")
+        .cambioMiMi(actual)
     }
 }
 

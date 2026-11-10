@@ -25,6 +25,7 @@ struct TuDiaView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 32) {
                 encabezado(ahora: ahora)
+                    .entradaMiMi()
                 if medicamentos.isEmpty && notas.isEmpty {
                     TarjetaPastel(color: Paleta.lavanda,
                                   ilustracion: Ilustracion(nombre: "ilus-vacio", simbolo: "leaf", color: .clear, color2: .clear, alto: 130)) {
@@ -41,6 +42,9 @@ struct TuDiaView: View {
                     }
                 } else if !medicamentos.isEmpty {
                     principal(hoy, ahora: ahora)
+                        .id(hoy.first(where: { [.teToca, .preguntar, .pendiente].contains($0.estado(ahora: ahora)) })?.id ?? "descanso")
+                        .transition(.opacity)
+                        .entradaMiMi(orden: 1)
                     if !hoy.isEmpty { progreso(hoy, ahora: ahora) }
                     SemanaPrevia(hoy: ahora) { d in
                         Agenda.resumen(Agenda.tomas(en: d, meds: medicamentos, perfil: perfiles.first, registros: registros), ahora: ahora)
@@ -48,12 +52,14 @@ struct TuDiaView: View {
                         navegacion.pestana = .calendario
                     }
                     masTarde(hoy, ahora: ahora)
+                        .entradaMiMi(orden: 3)
                 }
                 if !notas.isEmpty { recuerda }
             }
             .padding(.horizontal, 24)
             .padding(.top, 8)
             .padding(.bottom, 32)
+            .cambioMiMi(hoy.map { $0.registro?.estadoRaw ?? "pendiente" })
         }
     }
 
@@ -177,6 +183,8 @@ struct TuDiaView: View {
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Hoy: \(hechas) de \(hoy.count) actividades registradas")
+        .cambioMiMi(hechas)
+        .entradaMiMi(orden: 2)
     }
 
     /// Notas de la receta (dieta, cuidados, próxima cita) para que no se pierdan.
@@ -548,7 +556,7 @@ private struct ModificadorTomas: ViewModifier {
                         .transition(.move(edge: .bottom).combined(with: .opacity))
                 }
             }
-            .animation(.snappy(duration: 0.3), value: control.deshacer)
+            .cambioMiMi(control.deshacer)
             .sensoryFeedback(.success, trigger: control.confirmaciones)
             .sheet(item: $control.elegida) { t in
                 DetalleTomaView(toma: t,

@@ -182,7 +182,9 @@ struct LeyendoView: View {
     let etapa: LectorIA.Etapa
     let esReceta: Bool
 
-    @State private var arriba = true
+    @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
+    @Environment(\.scenePhase) private var fase
+    @State private var visible = false
 
     private var texto: String {
         switch etapa {
@@ -200,11 +202,15 @@ struct LeyendoView: View {
                 .scaledToFill()
                 .frame(width: 220, height: 280)
                 .clipShape(RoundedRectangle(cornerRadius: Radio.tarjeta, style: .continuous))
-                .overlay(alignment: arriba ? .top : .bottom) {
-                    Capsule()
-                        .fill(Paleta.acento)
-                        .frame(height: 4)
-                        .padding(.horizontal, 10)
+                .overlay(alignment: .top) {
+                    TimelineView(.animation(minimumInterval: 1.0 / 30, paused: reducirMovimiento || fase != .active || !visible)) { reloj in
+                        let progreso = reducirMovimiento ? 0.5 : (1 - cos(reloj.date.timeIntervalSinceReferenceDate * .pi / 1.4)) / 2
+                        Capsule()
+                            .fill(Paleta.acento)
+                            .frame(height: 4)
+                            .padding(.horizontal, 10)
+                            .offset(y: 8 + 260 * progreso)
+                    }
                 }
                 .overlay(RoundedRectangle(cornerRadius: Radio.tarjeta, style: .continuous)
                     .strokeBorder(Paleta.tinta, lineWidth: 1.5))
@@ -228,9 +234,9 @@ struct LeyendoView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .background(Paleta.fondo.ignoresSafeArea())
         .navigationBarBackButtonHidden(true)
-        .onAppear {
-            withAnimation(.easeInOut(duration: 1.4).repeatForever(autoreverses: true)) { arriba = false }
-        }
+        .entradaMiMi()
+        .onAppear { visible = true }
+        .onDisappear { visible = false }
     }
 }
 
