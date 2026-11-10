@@ -70,12 +70,15 @@ extension View {
 struct SelectorTamanoLetra: View {
     @AppStorage(ClavesApp.tamanoLetra) private var raw = TamanoLetra.sistema.rawValue
 
+    private var actual: TamanoLetra { TamanoLetra(rawValue: raw) ?? .sistema }
+
     var body: some View {
         VStack(spacing: 12) {
             ForEach(TamanoLetra.allCases) { opcion in
-                let elegido = raw == opcion.rawValue
+                let elegido = actual == opcion
                 Button {
-                    withAnimation(.snappy) { raw = opcion.rawValue }
+                    // Sin animación: el cambio de tamaño de toda la app se aplica de una vez.
+                    raw = opcion.rawValue
                 } label: {
                     HStack(spacing: 14) {
                         RadioCoral(marcado: elegido)
@@ -83,14 +86,19 @@ struct SelectorTamanoLetra: View {
                             .font(.body.weight(.semibold))
                             .foregroundStyle(Paleta.tinta)
                             .fixedSize(horizontal: false, vertical: true)
-                            .dynamicTypeSize(opcion.muestra)
                         Spacer(minLength: 0)
+                        if elegido {
+                            Text("Elegido")
+                                .font(.body.weight(.bold))
+                                .foregroundStyle(Paleta.tinta)
+                        }
                     }
                     .padding(16)
                     .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: Radio.control, style: .continuous).fill(Paleta.fondo))
+                    .background(RoundedRectangle(cornerRadius: Radio.control, style: .continuous)
+                        .fill(elegido ? Paleta.acentoSuave : Paleta.fondo))
                     .overlay(RoundedRectangle(cornerRadius: Radio.control, style: .continuous)
-                        .strokeBorder(elegido ? Paleta.marcaFuerte : Paleta.borde, lineWidth: elegido ? 2 : 1.2))
+                        .strokeBorder(elegido ? Paleta.acento : Paleta.borde, lineWidth: elegido ? 2.5 : 1.2))
                     .contentShape(RoundedRectangle(cornerRadius: Radio.control, style: .continuous))
                 }
                 .buttonStyle(EstiloPresionable())
@@ -395,36 +403,50 @@ struct FilaHora: View {
     @Environment(\.dynamicTypeSize) private var tamanoLetra
 
     var body: some View {
-        let disposicion = tamanoLetra.isAccessibilitySize
-            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 10))
-            : AnyLayout(HStackLayout(spacing: 14))
-        disposicion {
+        // El nombre nunca se parte en varios renglones: si no cabe junto a los botones, los botones bajan.
+        ViewThatFits(in: .horizontal) {
             HStack(spacing: 14) {
-                Image(systemName: momento.icono)
-                    .font(.title3)
-                    .foregroundStyle(Paleta.tinta)
-                    .frame(width: 46, height: 46)
-                    .background(Circle().fill(resaltar ? Paleta.acentoSuave : Paleta.marcaSuave))
-                    .accessibilityHidden(true)
-                Text(momento.nombre)
-                    .font(Tipo.seccion)
-                    .foregroundStyle(Paleta.tinta)
+                etiqueta.fixedSize()
+                Spacer(minLength: 8)
+                controles
             }
-            if !tamanoLetra.isAccessibilitySize { Spacer(minLength: 8) }
-            // Botones grandes de −30 y +30 minutos: más fáciles que la rueda con temblor en las manos.
-            HStack(spacing: 10) {
-                botonCambio("minus", etiqueta: "Media hora antes", minutos: -30)
-                Text(horaTexto)
-                    .font(.system(.title3, weight: .semibold))
-                    .monospacedDigit()
-                    .foregroundStyle(Paleta.tinta)
-                    .frame(minWidth: 96)
-                    .contentTransition(.numericText())
-                    .accessibilityLabel("\(momento.nombre) a las \(horaTexto)")
-                botonCambio("plus", etiqueta: "Media hora después", minutos: 30)
+            VStack(alignment: .leading, spacing: 10) {
+                etiqueta
+                controles
             }
         }
         .frame(minHeight: 56)
+    }
+
+    private var etiqueta: some View {
+        HStack(spacing: 14) {
+            Image(systemName: momento.icono)
+                .font(.title3)
+                .foregroundStyle(Paleta.tinta)
+                .frame(width: 46, height: 46)
+                .background(Circle().fill(resaltar ? Paleta.acentoSuave : Paleta.marcaSuave))
+                .accessibilityHidden(true)
+            Text(momento.nombre)
+                .font(Tipo.seccion)
+                .foregroundStyle(Paleta.tinta)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+    }
+
+    // Botones grandes de −30 y +30 minutos: más fáciles que la rueda con temblor en las manos.
+    private var controles: some View {
+        HStack(spacing: 10) {
+            botonCambio("minus", etiqueta: "Media hora antes", minutos: -30)
+            Text(horaTexto)
+                .font(.system(.title3, weight: .semibold))
+                .monospacedDigit()
+                .foregroundStyle(Paleta.tinta)
+                .frame(minWidth: 96)
+                .contentTransition(.numericText())
+                .accessibilityLabel("\(momento.nombre) a las \(horaTexto)")
+            botonCambio("plus", etiqueta: "Media hora después", minutos: 30)
+        }
     }
 
     private var horaTexto: String {

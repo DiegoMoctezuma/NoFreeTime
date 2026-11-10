@@ -122,9 +122,10 @@ final class ServicioAvisosSistema: ServicioAvisos {
     }
 
     /// Demo (PRD A6): adelanta el aviso de una toma a dentro de `segundos`.
-    func programarPrueba(_ med: Medicamento, toma: TomaProgramada, segundos: TimeInterval = 60) async throws {
+    /// `tipo` permite probar la alarma o la notificación sin cambiar lo que eligió la persona.
+    func programarPrueba(_ med: Medicamento, toma: TomaProgramada, segundos: TimeInterval = 10, tipo: TipoAviso? = nil) async throws {
         let fecha = Date.now.addingTimeInterval(segundos)
-        switch med.aviso {
+        switch tipo ?? med.aviso {
         case .recordatorio:
             try await agregarNotificacion(med: med, idToma: toma.id, momento: toma.momento, fecha: fecha, repeticion: 0)
         default:

@@ -66,7 +66,8 @@ final class LectorIA {
     static var motor: Motor {
         let usar = UserDefaults.standard.object(forKey: ClavesApp.usarIA) as? Bool ?? true
         guard usar else { return .ninguno }
-        let nube = UserDefaults.standard.bool(forKey: ClavesApp.permitirNube)
+        // DeepSeek es el lector principal (decisión del equipo, 9 nov): si nunca se tocó el interruptor, está permitido.
+        let nube = UserDefaults.standard.object(forKey: ClavesApp.permitirNube) as? Bool ?? true
         if nube && ServicioDeepSeek.configurado { return .deepseek }
         if appleLista { return .apple }
         return .ninguno

@@ -57,7 +57,7 @@ struct AltaFlujoView: View {
     @Environment(\.modelContext) private var contexto
     @Environment(Navegacion.self) private var navegacion
     @AppStorage(ClavesApp.usarIA) private var usarIA = true
-    @AppStorage(ClavesApp.permitirNube) private var permitirNube = false
+    @AppStorage(ClavesApp.permitirNube) private var permitirNube = true
     @State private var modelo = ModeloAlta()
     @State private var ruta: [PasoAlta] = []
     @State private var lector = LectorIA()
@@ -81,7 +81,11 @@ struct AltaFlujoView: View {
         .tint(Paleta.tinta)
         .onAppear {
             if usarIA { lector.preparar(tratamiento: Almacen.medicamentosActivos(en: contexto)) }
+            atenderMiMi()
         }
+        .onChange(of: navegacion.abrirAlta) { atenderMiMi() }
+        .onChange(of: ruta) { _, nueva in navegacion.pasoAlta = nueva.last }
+        .onDisappear { navegacion.pasoAlta = nil }
     }
 
     // MARK: Inicio de la pestaña
@@ -191,6 +195,20 @@ struct AltaFlujoView: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    /// MiMi pidió abrir la cámara de la receta o de la caja. Sin lectura disponible, se queda en el inicio de Agregar.
+    private func atenderMiMi() {
+        navegacion.pasoAlta = ruta.last
+        guard let paso = navegacion.abrirAlta else { return }
+        navegacion.abrirAlta = nil
+        guard iaLista else {
+            ruta.removeAll()
+            return
+        }
+        modelo.reiniciar()
+        modelo.vieneDeReceta = paso == .leerReceta
+        ruta = [paso]
     }
 
     private var iaLista: Bool {

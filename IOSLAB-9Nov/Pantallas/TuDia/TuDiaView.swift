@@ -557,6 +557,9 @@ private struct ModificadorTomas: ViewModifier {
                 }
             }
             .cambioMiMi(control.deshacer)
+            .onChange(of: control.deshacer != nil) { _, visible in
+                Navegacion.compartida.deshacerVisible = visible
+            }
             .sensoryFeedback(.success, trigger: control.confirmaciones)
             .sheet(item: $control.elegida) { t in
                 DetalleTomaView(toma: t,

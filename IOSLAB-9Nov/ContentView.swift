@@ -9,6 +9,7 @@ struct ContentView: View {
     @AppStorage(ClavesApp.altaTerminada) private var altaTerminada = false
     @Environment(Navegacion.self) private var navegacion
     @Environment(\.accessibilityReduceMotion) private var reducirMovimiento
+    @State private var mostrarSplash = true
 
     var body: some View {
         Group {
@@ -26,6 +27,12 @@ struct ContentView: View {
         .tint(Paleta.tinta)
         .preferredColorScheme(.light)
         .tamanoLetraElegido()
+        .overlay {
+            if mostrarSplash {
+                SplashView { mostrarSplash = false }
+                    .ignoresSafeArea()
+            }
+        }
         .transaction { transaccion in
             if reducirMovimiento {
                 transaccion.animation = nil
@@ -38,6 +45,9 @@ struct ContentView: View {
 /// Pestañas de la app ya configurada. La barra es la del sistema: en iOS 26+ es de Liquid Glass.
 struct InicioView: View {
     @Environment(Navegacion.self) private var navegacion
+    @State private var mostrarMiMi = false
+
+    private var muestraBurbuja: Bool { navegacion.pasoAlta == nil && !navegacion.deshacerVisible }
 
     var body: some View {
         @Bindable var navegacion = navegacion
@@ -56,6 +66,18 @@ struct InicioView: View {
             }
         }
         .tint(Paleta.tinta)
+        // Espacio al final de cada lista para que el globito de MiMi no tape lo último.
+        .contentMargins(.bottom, 84, for: .scrollContent)
+        .overlay(alignment: .bottomTrailing) {
+            if muestraBurbuja {
+                BurbujaMiMi { mostrarMiMi = true }
+                    .padding(.trailing, 18)
+                    .padding(.bottom, BurbujaMiMi.margenInferior)
+                    .transition(.scale(scale: 0.8).combined(with: .opacity))
+            }
+        }
+        .animation(MovimientoMiMi.cambio, value: muestraBurbuja)
+        .sheet(isPresented: $mostrarMiMi) { PanelMiMi() }
         .onChange(of: navegacion.tomaResaltada) { _, nueva in
             // Un aviso abrió la app: se muestra Inicio con la toma resaltada.
             if nueva != nil { navegacion.pestana = .hoy }

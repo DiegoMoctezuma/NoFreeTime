@@ -37,7 +37,7 @@ struct ComoTeAvisoView: View {
             }
             if mostrarPrueba {
                 VStack(alignment: .leading, spacing: 6) {
-                    BotonGrande(titulo: "Probar aviso en 1 minuto", icono: "timer", estilo: .texto) {
+                    BotonGrande(titulo: "Probar aviso en 10 segundos", icono: "timer", estilo: .texto) {
                         Task { await probar() }
                     }
                     if let mensajePrueba {
@@ -142,7 +142,7 @@ struct ComoTeAvisoView: View {
         }
     }
 
-    /// Adelanta a 1 minuto el aviso de la siguiente toma pendiente de hoy del primer medicamento.
+    /// Adelanta a 10 segundos el aviso de la siguiente toma pendiente del primer medicamento.
     private func probar() async {
         guard let med = medicamentos.first, let perfil = Almacen.perfil(en: contexto) else { return }
         med.aviso = eleccion[med.id] ?? .alarma
@@ -152,7 +152,7 @@ struct ComoTeAvisoView: View {
             sinPermiso = true
             return
         }
-        let tomas = Plan.tomas(de: med, perfil: perfil, desde: .now, dias: 1)
+        let tomas = Plan.tomas(de: med, perfil: perfil, desde: .now, dias: 2)
         let pendiente = tomas.first { Registro.registro(idToma: $0.id, contexto: contexto) == nil } ?? tomas.first
         guard let toma = pendiente else {
             mensajePrueba = "Este medicamento no tiene tomas hoy."
@@ -160,7 +160,7 @@ struct ComoTeAvisoView: View {
         }
         do {
             try await servicio.programarPrueba(med, toma: toma)
-            mensajePrueba = "Listo: \(med.nombreVisible) sonará en 1 minuto. Bloquea el iPhone para verlo."
+            mensajePrueba = "Listo: \(med.nombreVisible) sonará en 10 segundos. Bloquea el iPhone para verlo en pantalla completa."
         } catch {
             mensajePrueba = "No se pudo programar: \(error.localizedDescription)"
         }

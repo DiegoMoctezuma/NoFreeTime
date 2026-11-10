@@ -27,11 +27,13 @@ private struct PerfilContenido: View {
     @Environment(\.modelContext) private var contexto
     @AppStorage(ClavesApp.altaTerminada) private var altaTerminada = false
     @AppStorage(ClavesApp.usarIA) private var usarIA = true
-    @AppStorage(ClavesApp.permitirNube) private var permitirNube = false
+    @AppStorage(ClavesApp.permitirNube) private var permitirNube = true
     @AppStorage(ClavesApp.leerEnVoz) private var leerEnVoz = false
     @State private var confirmarEjemplo = false
     @State private var confirmarBorrar = false
     @State private var tareaReprogramar: Task<Void, Never>?
+    @State private var mensajePrueba: String?
+    @State private var probando = false
 
     var body: some View {
         ScrollView {
@@ -147,6 +149,21 @@ private struct PerfilContenido: View {
                 if mostrarPruebas {
                     seccion("Para el demo") {
                         VStack(spacing: 10) {
+                            BotonGrande(titulo: "Probar alarma en 10 segundos", icono: "alarm.fill", estilo: .secundario) {
+                                Task { await probarAviso(.alarma) }
+                            }
+                            .disabled(probando)
+                            BotonGrande(titulo: "Probar notificación en 10 segundos", icono: "bell.fill", estilo: .secundario) {
+                                Task { await probarAviso(.recordatorio) }
+                            }
+                            .disabled(probando)
+                            if let mensajePrueba {
+                                Text(mensajePrueba)
+                                    .font(.body.weight(.semibold))
+                                    .foregroundStyle(Paleta.tinta)
+                                    .fixedSize(horizontal: false, vertical: true)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                            }
                             NavigationLink {
                                 ComoTeAvisoView(medicamentos: activos) {}
                             } label: {
@@ -226,6 +243,36 @@ private struct PerfilContenido: View {
     }
 
     private var rutina: [Int] { [perfil.desayunoMin, perfil.comidaMin, perfil.cenaMin, perfil.dormirMin] }
+
+    /// Demo (PRD A6): adelanta a 10 segundos la siguiente toma de la primera medicina, como alarma o como notificación.
+    /// Para ver la alarma en pantalla completa, bloquear el iPhone después de tocar el botón.
+    private func probarAviso(_ tipo: TipoAviso) async {
+        guard let med = activos.first else {
+            mensajePrueba = "Primero agrega una medicina."
+            return
+        }
+        probando = true
+        defer { probando = false }
+        let servicio = ServicioAvisosSistema.compartido
+        guard await servicio.pedirPermiso(para: tipo) == .concedido else {
+            mensajePrueba = tipo == .alarma
+                ? "Falta permitir las alarmas de MiMi en Ajustes del iPhone."
+                : "Falta permitir las notificaciones de MiMi en Ajustes del iPhone."
+            return
+        }
+        let tomas = Plan.tomas(de: med, perfil: perfil, desde: .now, dias: 2)
+        guard let toma = tomas.first(where: { Registro.registro(idToma: $0.id, contexto: contexto) == nil }) ?? tomas.first else {
+            mensajePrueba = "\(med.nombreVisible.capitalizedPrimera) no tiene tomas próximas."
+            return
+        }
+        do {
+            try await servicio.programarPrueba(med, toma: toma, segundos: 10, tipo: tipo)
+            let que = tipo == .alarma ? "la alarma" : "la notificación"
+            mensajePrueba = "Listo: en 10 segundos llega \(que) de \(med.nombreVisible). Bloquea el iPhone para verla completa."
+        } catch {
+            mensajePrueba = "No se pudo programar: \(error.localizedDescription)"
+        }
+    }
 
     /// Botones de prueba del demo (PRD A6): en DEBUG o con los datos de ejemplo.
     private var mostrarPruebas: Bool {
