@@ -45,6 +45,8 @@ private struct PerfilContenido: View {
                 SeccionNotas()
                     .entradaMiMi(orden: 2)
 
+                SeccionConfianza(perfil: perfil)
+
                 seccion("Tu nombre") {
                     TextField("Tu nombre", text: $perfil.nombre)
                         .font(.system(.title3, design: .serif, weight: .semibold))
@@ -125,7 +127,7 @@ private struct PerfilContenido: View {
 //                }
 
                 seccion("Tu información") {
-                    Label("No hay cuenta ni contraseña. Tus fotos y registros se guardan en este iPhone.",
+                    Label("No hay cuenta ni contraseña. Tus fotos, registros y persona de confianza se guardan en este iPhone. Si compartes un resumen, el canal que elijas recibe el texto y el destinatario cuando continúas.",
                           systemImage: "lock")
                         .font(.body)
                         .foregroundStyle(Paleta.tinta)

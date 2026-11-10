@@ -12,11 +12,11 @@
 
 ## Entrega 2: confianza
 
-- [ ] Evaluar documentación oficial de CallMeBot, privacidad, términos y ejecución en segundo plano de iOS antes de decidir integración.
-- [ ] Configuración opcional por un familiar, persistencia local y borrado; contacto telefónico y resumen mínimo con envío confirmado por la persona. Sin agregar controles a Inicio.
-- [ ] Separar tomas confirmadas, omitidas, sin confirmar y futuras. Nunca convertir «registradas» en «tomadas» ni diagnosticar una omisión a partir del silencio.
-- [ ] Pruebas de reglas y persistencia; README, pitch y decisión técnica con ruta concreta para avisos remotos fiables.
-- [ ] Revisión independiente, verificaciones disponibles, commit y push a `propuestas/carlos`.
+- [x] Evaluar documentación oficial de CallMeBot, privacidad, términos y ejecución en segundo plano de iOS antes de decidir integración.
+- [x] Configuración opcional por un familiar, persistencia local y borrado; contacto telefónico y resumen mínimo con envío confirmado por la persona. Sin agregar controles a Inicio.
+- [x] Separar tomas confirmadas, omitidas, sin confirmar y futuras. Nunca convertir «registradas» en «tomadas» ni diagnosticar una omisión a partir del silencio.
+- [x] Pruebas de reglas y persistencia; README, pitch y decisión técnica con ruta concreta para avisos remotos fiables. Núcleo ejecutado; persistencia iOS pendiente de Xcode.
+- [x] Revisión independiente, verificaciones disponibles, commit y push a `propuestas/carlos`.
 
 ## Riesgos que revisar
 

@@ -11,6 +11,10 @@ final class Perfil {
     var dormirMin: Int
     /// Marca los datos de ejemplo ("Datos de ejemplo" en Ajustes).
     var esDemo: Bool
+    // Opcionales para que los perfiles existentes migren sin pedir datos nuevos.
+    var confianzaNombre: String? = nil
+    var confianzaTelefono: String? = nil
+    var confianzaCanal: String? = nil
 
     init(nombre: String,
          desayunoMin: Int = Perfil.sugerido.desayuno,

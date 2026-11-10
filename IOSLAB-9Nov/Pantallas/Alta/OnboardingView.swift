@@ -8,7 +8,7 @@ struct OnboardingView: View {
     let alTerminar: (_ agregarAhora: Bool) -> Void
 
     private enum Paso: Int, CaseIterable {
-        case hola, receta, aviso, dia, letra, nombre, rutina, listo
+        case hola, receta, aviso, dia, letra, nombre, rutina, confianza, listo
     }
 
     @Environment(\.modelContext) private var contexto
@@ -26,6 +26,7 @@ struct OnboardingView: View {
     @State private var transcripcionRutina: String?
     @State private var procesando = false
     @State private var dictado = Dictado()
+    @State private var configurarConfianza = false
     @FocusState private var nombreEnfocado: Bool
 
     var body: some View {
@@ -56,6 +57,9 @@ struct OnboardingView: View {
         }
         .onDisappear { dictado.detener() }
         .onAppear(perform: cargarPerfil)
+        .sheet(isPresented: $configurarConfianza) {
+            if let perfil = Almacen.perfil(en: contexto) { EditorConfianzaView(perfil: perfil) }
+        }
     }
 
     /// Si quedaron datos de ejemplo de una prueba anterior, se borran: el onboarding empieza limpio.
@@ -108,6 +112,10 @@ struct OnboardingView: View {
             }
             .padding(.horizontal, 24)
             .padding(.bottom, 8)
+        } else if paso == .confianza {
+            BotonGrande(titulo: "Continuar", icono: "arrow.right") { ir(.listo) }
+                .padding(.horizontal, 24)
+                .padding(.bottom, 8)
         } else {
             HStack {
                 IndicadorPaso(actual: paso.rawValue + 1, total: Paso.allCases.count)
@@ -157,6 +165,19 @@ struct OnboardingView: View {
             preguntaNombre(ilusAlto: max(220, alto * 0.4))
         case .rutina:
             preguntaRutina
+        case .confianza:
+            VStack(alignment: .leading, spacing: 20) {
+                Ilustracion(nombre: "ilus-confianza", simbolo: "person.2", color: Paleta.salvia, color2: Paleta.durazno, alto: 180)
+                Text("Alguien con quien contar").font(Tipo.pregunta).accessibilityAddTraits(.isHeader)
+                Text("Si estás con un familiar o una amistad, pueden guardar su contacto juntos. Es opcional: también puedes hacerlo después en Perfil.")
+                    .font(.title3).fixedSize(horizontal: false, vertical: true)
+                BotonGrande(titulo: "Configurar con mi persona de confianza", icono: "person.2", estilo: .secundario) {
+                    configurarConfianza = true
+                }
+                Text("MiMi no avisa automáticamente a nadie. Tú decides cuándo llamar o compartir un resumen.")
+                    .font(.body).foregroundStyle(Paleta.tintaSuave)
+            }
+            .foregroundStyle(Paleta.tinta)
         case .listo:
             presentacion(ilus: Ilustracion(nombre: "ilus-listo", simbolo: "checkmark.seal", color: Paleta.salvia, color2: Paleta.durazno),
                          alto: ilusAlto,
@@ -306,7 +327,7 @@ struct OnboardingView: View {
             ir(.rutina)
         case .rutina:
             guardarPerfil()
-            ir(.listo)
+            ir(.confianza)
         case .listo:
             alTerminar(false)
         default:
