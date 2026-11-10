@@ -37,10 +37,13 @@ private struct PerfilContenido: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 30) {
                 encabezado
+                    .entradaMiMi()
 
                 SeccionMedicinas()
+                    .entradaMiMi(orden: 1)
 
                 SeccionNotas()
+                    .entradaMiMi(orden: 2)
 
                 seccion("Tu nombre") {
                     TextField("Tu nombre", text: $perfil.nombre)

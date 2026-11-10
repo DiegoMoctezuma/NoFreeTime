@@ -69,6 +69,7 @@ struct AltaFlujoView: View {
     var body: some View {
         NavigationStack(path: $ruta) {
             inicio
+                .entradaMiMi()
                 .toolbar(.hidden, for: .navigationBar)
                 .navigationDestination(for: PasoAlta.self) { paso in
                     destino(paso)

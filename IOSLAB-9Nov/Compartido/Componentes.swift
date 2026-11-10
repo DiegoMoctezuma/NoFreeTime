@@ -261,6 +261,7 @@ struct RadioCoral: View {
             }
         }
         .frame(width: 30, height: 30)
+        .cambioMiMi(marcado)
         .accessibilityHidden(true)
     }
 }
@@ -302,10 +303,13 @@ struct ChipSeleccion: View {
 
 /// Encoge un poco al presionar; sin cambiar colores.
 struct EstiloPresionable: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reducir
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
-            .scaleEffect(configuration.isPressed ? 0.98 : 1)
-            .animation(.snappy(duration: 0.15), value: configuration.isPressed)
+            .scaleEffect(configuration.isPressed && !reducir ? 0.97 : 1)
+            .opacity(configuration.isPressed ? 0.86 : 1)
+            .animation(reducir ? nil : MovimientoMiMi.respuesta, value: configuration.isPressed)
     }
 }
 

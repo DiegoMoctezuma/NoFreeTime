@@ -34,6 +34,7 @@ struct CalendarioView: View {
                     CalendarioSemana(seleccion: $dia, hoy: ahora) { d in
                         Agenda.resumen(Agenda.tomas(en: d, meds: medicamentos, perfil: perfiles.first, registros: registros), ahora: ahora)
                     }
+                    .entradaMiMi()
 
                     VStack(alignment: .leading, spacing: 4) {
                         Text(tituloDia(ahora: ahora))
@@ -106,6 +107,8 @@ struct CalendarioView: View {
         }
         .padding(22)
         .background(RoundedRectangle(cornerRadius: Radio.tarjeta + 4, style: .continuous).fill(Paleta.pastel(franja)))
+        .entradaMiMi(orden: 1)
+        .cambioMiMi(tomas.map { $0.registro?.estadoRaw ?? "pendiente" })
     }
 
     private func irAResaltada(_ lector: ScrollViewProxy) {
