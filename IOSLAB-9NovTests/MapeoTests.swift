@@ -12,12 +12,12 @@ struct MapeoTests {
         #expect(r.dudosos.isEmpty)
     }
 
-    @Test(arguments: [(24, [Momento.desayuno]), (12, [.desayuno, .cena]), (8, [.desayuno, .comida, .cena])])
-    func soloCadaHorasDeduceMomentosYLosMarcaDudosos(cadaHoras: Int, esperado: [Momento]) {
+    @Test(arguments: [24, 12, 8])
+    func soloCadaHorasNoSeConvierteEnMomentos(cadaHoras: Int) {
         let p = IndicacionPropuesta(nombre: "Losartán", dosis: "1 tableta", cadaHoras: cadaHoras)
         let r = MapeoIndicacion.momentos(de: p)
-        #expect(r.momentos == esperado)
-        #expect(r.dudosos.contains("cadaHoras"))
+        #expect(r.momentos.isEmpty)
+        #expect(r.dudosos.isEmpty)
     }
 
     @Test func horaExactaUsaHoraTexto() {
@@ -36,13 +36,13 @@ struct MapeoTests {
     @Test func indicacionAMedicamento() {
         let hoy = Date.now
         let p = IndicacionPropuesta(nombre: " Losartán ", concentracion: "50 mg", dosis: "1 tableta",
-                                    cadaHoras: 24, momentos: [.desayuno], duracionDias: 30, indicaciones: "con alimentos")
+                                    momentos: [.desayuno], duracionDias: 30, indicaciones: "con alimentos")
         let m = MapeoIndicacion.medicamento(de: p, inicio: hoy)
         #expect(m.nombre == "Losartán")
         #expect(m.concentracion == "50 mg")
         #expect(m.dosis == "1 tableta")
         #expect(m.momentos == [.desayuno])
-        #expect(m.cadaHoras == 24)
+        #expect(m.cadaHoras == nil)
         #expect(m.duracionDias == 30)
         #expect(m.inicio == hoy)
         #expect(m.aviso == .alarma)

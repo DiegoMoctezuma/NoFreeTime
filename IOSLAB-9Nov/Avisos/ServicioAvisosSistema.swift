@@ -113,7 +113,8 @@ final class ServicioAvisosSistema: ServicioAvisos {
         let contexto = Almacen.contenedor.mainContext
         if Registro.registro(idToma: idToma, contexto: contexto)?.estado == .tomada { return }
         guard let (medID, programada) = Registro.partes(de: idToma),
-              let med = Almacen.medicamento(id: medID, en: contexto) else { return }
+              let med = Almacen.medicamento(id: medID, en: contexto),
+              repeticion < Self.repeticiones(para: med) else { return }
         let momento = Plan.tomas(de: med, perfil: Almacen.perfil(en: contexto) ?? Perfil(nombre: ""), desde: programada, dias: 1)
             .first { $0.id == idToma }?.momento ?? med.momentos.first ?? .desayuno
         let fecha = Date.now.addingTimeInterval(TimeInterval(Identificadores.minutosEntreRepeticiones * 60))
@@ -140,9 +141,11 @@ final class ServicioAvisosSistema: ServicioAvisos {
     private func programarAlarma(med: Medicamento, idToma: String, momento: Momento, fecha: Date, repeticion: Int) async throws {
         let id = Identificadores.alarma(idToma: idToma, repeticion: repeticion)
         try? alarmas.cancel(id: id)   // reprogramar no duplica
+        let detalle = [med.dosis, momento.texto].filter { !$0.isEmpty }.joined(separator: " ")
         let alerta = AlarmPresentation.Alert(
-            title: "\(titulo(med)) · \(med.dosis) \(momento.texto)",
-            secondaryButton: AlarmButton(text: "Ya me la tomé", textColor: .white, systemImageName: "checkmark.circle.fill"),
+            title: "\(titulo(med)) · \(detalle)",
+            secondaryButton: AlarmButton(text: "\(med.accionRegistro)",
+                                         textColor: .white, systemImageName: "checkmark.circle.fill"),
             secondaryButtonBehavior: .custom
         )
         let atributos = AlarmAttributes(
@@ -163,8 +166,15 @@ final class ServicioAvisosSistema: ServicioAvisos {
         registro = reg
     }
 
+    /// Repeticiones (+10 y +20 min) de cada aviso. Con pautas cada 1 o 2 horas no se repite:
+    /// se encimaría con la siguiente toma y gastaría avisos del límite de iOS.
+    static func repeticiones(para med: Medicamento) -> Int {
+        if med.inicioIntervalo != nil, let horas = med.cadaHoras, horas <= 2 { return 0 }
+        return Identificadores.maxRepeticiones
+    }
+
     private func programarRecordatorio(med: Medicamento, toma: TomaProgramada) async throws {
-        for r in 0...Identificadores.maxRepeticiones {
+        for r in 0...Self.repeticiones(para: med) {
             let fecha = toma.fecha.addingTimeInterval(TimeInterval(r * Identificadores.minutosEntreRepeticiones * 60))
             try await agregarNotificacion(med: med, idToma: toma.id, momento: toma.momento, fecha: fecha, repeticion: r)
         }
@@ -174,12 +184,19 @@ final class ServicioAvisosSistema: ServicioAvisos {
         let contenido = UNMutableNotificationContent()
         contenido.title = titulo(med)
         contenido.subtitle = med.nombreTecnico
-        contenido.body = "\(med.dosis) \(momento.texto)" + (repeticion > 0 ? ". ¿Ya te la tomaste?" : "")
+        contenido.body = [med.dosis, momento.texto].filter { !$0.isEmpty }.joined(separator: " ")
+            + (repeticion > 0 ? ". \(med.preguntaRegistro)" : "")
         contenido.sound = .default
-        contenido.categoryIdentifier = Identificadores.categoriaToma
+        contenido.categoryIdentifier = switch med.tipoAccion {
+        case .toma: Identificadores.categoriaToma
+        case .aplicacion: Identificadores.categoriaAplicacion
+        case .cuidado: Identificadores.categoriaCuidado
+        }
         contenido.userInfo = ["idToma": idToma]
         contenido.interruptionLevel = .active
-        let comps = Calendar.current.dateComponents([.year, .month, .day, .hour, .minute, .second], from: fecha)
+        var calendario = Calendar.current
+        if med.inicioIntervalo != nil { calendario.timeZone = .gmt }
+        let comps = calendario.dateComponents([.timeZone, .year, .month, .day, .hour, .minute, .second], from: fecha)
         let solicitud = UNNotificationRequest(
             identifier: Identificadores.notificacion(idToma: idToma, repeticion: repeticion),
             content: contenido,

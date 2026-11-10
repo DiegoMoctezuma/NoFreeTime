@@ -17,35 +17,45 @@ struct ComoTeAvisoView: View {
     private let servicio = ServicioAvisosSistema.compartido
 
     var body: some View {
-        if sinPermiso {
-            pantallaSinPermiso
-        } else {
-            pantallaEleccion
+        Group {
+            if sinPermiso {
+                pantallaSinPermiso
+            } else {
+                pantallaEleccion
+            }
         }
+        .animation(.easeInOut(duration: 0.25), value: sinPermiso)
     }
 
     private var pantallaEleccion: some View {
         PantallaPregunta(titulo: "¿Cómo te aviso?",
                          subtitulo: "La alarma suena aunque tu iPhone esté en silencio.") {
-            ForEach(medicamentos) { med in
-                tarjeta(med)
+            VStack(spacing: 16) {
+                ForEach(medicamentos) { med in
+                    tarjeta(med)
+                }
             }
             if mostrarPrueba {
-                VStack(alignment: .leading, spacing: 8) {
-                    BotonGrande(titulo: "Probar aviso en 1 minuto", icono: "timer", estilo: .secundario) {
+                VStack(alignment: .leading, spacing: 6) {
+                    BotonGrande(titulo: "Probar aviso en 1 minuto", icono: "timer", estilo: .texto) {
                         Task { await probar() }
                     }
                     if let mensajePrueba {
-                        Text(mensajePrueba).font(.body).foregroundStyle(.secondary)
+                        Text(mensajePrueba)
+                            .font(.body)
+                            .foregroundStyle(Paleta.tintaSuave)
+                            .frame(maxWidth: .infinity)
+                            .multilineTextAlignment(.center)
                     }
                 }
-                .padding(.top, 8)
             }
         } botones: {
             BotonGrande(titulo: guardando ? "Guardando…" : "Listo", icono: "checkmark") {
                 Task { await confirmar() }
             }
             .disabled(guardando)
+            BotonGrande(titulo: "Ahora no", estilo: .texto, accion: alTerminar)
+                .disabled(guardando)
         }
         .onAppear {
             for med in medicamentos where eleccion[med.id] == nil {
@@ -55,45 +65,36 @@ struct ComoTeAvisoView: View {
     }
 
     private func tarjeta(_ med: Medicamento) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 12) {
-                Circle().fill(Color(hex: med.colorHex)).frame(width: 24, height: 24).accessibilityHidden(true)
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(spacing: 14) {
+                IconoMedicamento(med, tamano: 52)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(med.nombreVisible.capitalizedPrimera).font(.title2.bold())
-                    Text(med.nombreTecnico).font(.subheadline).foregroundStyle(.secondary)
+                    Text(med.nombreVisible.capitalizedPrimera)
+                        .font(Tipo.tarjeta)
+                        .foregroundStyle(Paleta.tinta)
+                    Text(med.nombreTecnico)
+                        .font(.subheadline)
+                        .foregroundStyle(Paleta.tintaSuave)
                 }
             }
-            HStack(spacing: 12) {
-                opcion(.alarma, med: med, icono: "alarm.fill", nota: "Recomendada")
-                opcion(.recordatorio, med: med, icono: "bell.fill", nota: "Más suave")
+            .accessibilityElement(children: .combine)
+            VStack(spacing: 10) {
+                TarjetaOpcion(icono: "alarm.fill", titulo: "Alarma",
+                              detalle: "Suena fuerte, con pantalla completa",
+                              insignia: "Recomendada",
+                              elegida: eleccion[med.id] == .alarma) {
+                    eleccion[med.id] = .alarma
+                }
+                .accessibilityLabel("Alarma para \(med.nombreVisible). Recomendada")
+                TarjetaOpcion(icono: "bell.fill", titulo: "Recordatorio",
+                              detalle: "Una notificación, más suave",
+                              elegida: eleccion[med.id] == .recordatorio) {
+                    eleccion[med.id] = .recordatorio
+                }
+                .accessibilityLabel("Recordatorio para \(med.nombreVisible)")
             }
         }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Paleta.tarjeta, in: RoundedRectangle(cornerRadius: 20, style: .continuous))
-    }
-
-    private func opcion(_ tipo: TipoAviso, med: Medicamento, icono: String, nota: String) -> some View {
-        let elegida = eleccion[med.id] == tipo
-        return Button {
-            eleccion[med.id] = tipo
-        } label: {
-            VStack(spacing: 6) {
-                Image(systemName: elegida ? "checkmark.circle.fill" : icono).font(.title2)
-                Text(tipo.titulo).font(.headline)
-                Text(nota).font(.footnote)
-            }
-            .frame(maxWidth: .infinity, minHeight: 88)
-            .padding(8)
-            .foregroundStyle(elegida ? Color.white : Color.primary)
-            .background(elegida ? Color.accentColor : Paleta.fondo,
-                        in: RoundedRectangle(cornerRadius: 14, style: .continuous))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .strokeBorder(Color.primary.opacity(elegida ? 0 : 0.5), lineWidth: 2))
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("\(tipo.titulo) para \(med.nombreVisible). \(nota)")
-        .accessibilityAddTraits(elegida ? .isSelected : [])
+        .tarjeta(relleno: 18, color: Paleta.hundido)
     }
 
     private var pantallaSinPermiso: some View {
@@ -102,10 +103,12 @@ struct ComoTeAvisoView: View {
             Image(systemName: "bell.slash.fill")
                 .font(.system(size: 64))
                 .foregroundStyle(Paleta.sePaso)
+                .frame(width: 150, height: 150)
+                .background(FormaOrganica().fill(Paleta.sePasoFondo))
                 .frame(maxWidth: .infinity)
                 .accessibilityHidden(true)
         } botones: {
-            BotonGrande(titulo: "Abrir Ajustes", icono: "gearshape") {
+            BotonGrande(titulo: "Abrir Ajustes", icono: "gearshape.fill") {
                 if let url = URL(string: UIApplication.openSettingsURLString) { abrirURL(url) }
             }
             BotonGrande(titulo: "Seguir sin avisos", estilo: .secundario) { alTerminar() }

@@ -6,3 +6,6 @@ build/
 .build/
 .swiftpm/xcode/
 .DS_Store
+
+# Clave de DeepSeek (local, nunca se sube)
+IOSLAB-9Nov/Secretos.plist

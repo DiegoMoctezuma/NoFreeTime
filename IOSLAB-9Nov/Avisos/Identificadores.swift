@@ -27,5 +27,9 @@ nonisolated enum Identificadores {
     static let minutosEntreRepeticiones = 10
 
     static let categoriaToma = "TOMA"
+    static let categoriaAplicacion = "APLICACION"
+    static let categoriaCuidado = "CUIDADO"
     static let accionYaMeLaTome = "YA_ME_LA_TOME"
+    static let accionYaMeLaAplique = "YA_ME_LA_APLIQUE"
+    static let accionYaLoHice = "YA_LO_HICE"
 }

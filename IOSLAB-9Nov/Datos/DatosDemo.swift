@@ -24,6 +24,7 @@ enum DatosDemo {
 
     static func borrarTodo(en contexto: ModelContext) {
         try? contexto.delete(model: RegistroToma.self)
+        try? contexto.delete(model: NotaReceta.self)
         try? contexto.delete(model: Medicamento.self)
         try? contexto.delete(model: Perfil.self)
         try? contexto.save()

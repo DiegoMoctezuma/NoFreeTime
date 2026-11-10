@@ -7,4 +7,7 @@ final class Navegacion {
 
     /// Toma a resaltar en Tu día (plan B de la alarma y acción de la notificación).
     var tomaResaltada: String?
+
+    /// Pestaña visible. Hoy → "Agregar" desde el botón de Tu día vacío.
+    var pestana: Pestana = .hoy
 }

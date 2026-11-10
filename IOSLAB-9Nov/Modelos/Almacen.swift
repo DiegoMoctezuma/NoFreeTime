@@ -3,7 +3,7 @@ import SwiftData
 
 /// Contenedor de SwiftData compartido por la app y los App Intents (CONTRATOS §4).
 enum Almacen {
-    static let esquema = Schema([Perfil.self, Medicamento.self, RegistroToma.self])
+    static let esquema = Schema([Perfil.self, Medicamento.self, RegistroToma.self, NotaReceta.self])
 
     static let contenedor: ModelContainer = {
         let enMemoria = ProcessInfo.processInfo.arguments.contains("-enMemoria")

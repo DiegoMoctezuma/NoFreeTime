@@ -6,6 +6,12 @@
 	<string>Para sonar una alarma a la hora de cada medicamento, aunque el iPhone esté en silencio.</string>
 	<key>NSCameraUsageDescription</key>
 	<string>Para tomarle foto a tu receta y a la caja de tus medicamentos. Las fotos se quedan en tu iPhone.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Para que puedas responder hablando. Solo escucho cuando tocas el micrófono.</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>Para elegir una foto de tu receta o de la caja de tu medicina.</string>
+	<key>NSSpeechRecognitionUsageDescription</key>
+	<string>Para convertir tu voz en texto cuando respondes hablando.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 </dict>
