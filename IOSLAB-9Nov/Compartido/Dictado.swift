@@ -17,6 +17,15 @@ final class Dictado {
     private var tarea: SFSpeechRecognitionTask?
     private var archivo: URL?
     private var sesionAnterior: (categoria: AVAudioSession.Category, modo: AVAudioSession.Mode, opciones: AVAudioSession.CategoryOptions)?
+    /// Vigila el volumen para detenerse solo cuando la persona deja de hablar.
+    private var vigilancia: Task<Void, Never>?
+
+    /// Silencio que se espera después de haber hablado, y tiempo máximo de grabación.
+    private static let silencioParaTerminar: TimeInterval = 1.8
+    private static let maximoGrabacion: TimeInterval = 30
+    /// Umbrales en dB (0 = máximo): por encima se considera voz; por debajo, silencio.
+    private static let umbralVoz: Float = -32
+    private static let umbralSilencio: Float = -42
 
     func alternar() async {
         if escuchando {
@@ -33,6 +42,8 @@ final class Dictado {
     }
 
     func detener() {
+        vigilancia?.cancel()
+        vigilancia = nil
         grabadora?.stop()
         grabadora = nil
         tarea?.cancel()
@@ -76,16 +87,44 @@ final class Dictado {
             AVEncoderAudioQualityKey: AVAudioQuality.high.rawValue
         ]
         let g = try AVAudioRecorder(url: url, settings: ajustes)
+        g.isMeteringEnabled = true
         g.prepareToRecord()
         guard g.record() else { throw NSError(domain: "MiMi", code: 2) }
         grabadora = g
         texto = ""
         error = nil
         escuchando = true
+        vigilarSilencio()
+    }
+
+    /// Se detiene solo: después de oír voz, al haber ~2 s de silencio; o a los 30 s como máximo.
+    private func vigilarSilencio() {
+        vigilancia?.cancel()
+        vigilancia = Task { [weak self] in
+            var hablo = false
+            var silencio: TimeInterval = 0
+            var total: TimeInterval = 0
+            let paso: TimeInterval = 0.2
+            while !Task.isCancelled {
+                try? await Task.sleep(for: .milliseconds(200))
+                guard let self, self.escuchando, let g = self.grabadora else { return }
+                g.updateMeters()
+                let nivel = g.averagePower(forChannel: 0)
+                total += paso
+                if nivel > Self.umbralVoz { hablo = true; silencio = 0 }
+                else if nivel < Self.umbralSilencio { silencio += paso }
+                if (hablo && silencio >= Self.silencioParaTerminar) || total >= Self.maximoGrabacion {
+                    self.terminar()
+                    return
+                }
+            }
+        }
     }
 
     private func terminar() {
-        guard let url = archivo else { return }
+        vigilancia?.cancel()
+        vigilancia = nil
+        guard let url = archivo, escuchando else { return }
         grabadora?.stop()
         grabadora = nil
         escuchando = false

@@ -77,7 +77,7 @@ enum Tipo {
     static let tarjeta = Font.system(.title2, design: .serif, weight: .semibold)
     static let seccion = Font.system(.title3, weight: .semibold)
     static let etiqueta = Font.system(.headline, weight: .semibold)
-    static let mayusculas = Font.system(.footnote, weight: .semibold)
+    static let mayusculas = Font.system(.body, weight: .semibold)
 }
 
 enum Radio {
@@ -321,7 +321,7 @@ struct MarcaDudoso: ViewModifier {
             content
             if activo {
                 Label("Revisa esto", systemImage: "questionmark.circle.fill")
-                    .font(.subheadline.bold())
+                    .font(.body.bold())
                     .foregroundStyle(Paleta.tinta)
             }
         }

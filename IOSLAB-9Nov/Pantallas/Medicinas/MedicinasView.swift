@@ -43,6 +43,14 @@ struct SeccionMedicinas: View {
 struct TarjetaMedicina: View {
     let med: Medicamento
 
+    @ViewBuilder private var etiquetas: some View {
+        etiquetaAviso
+        if let fin = med.fin {
+            Label("Hasta el \(fin.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "es_MX"))))",
+                  systemImage: "calendar")
+        }
+    }
+
     var body: some View {
         HStack(alignment: .top, spacing: 16) {
             IconoMedicamento(med, tamano: 60)
@@ -53,21 +61,18 @@ struct TarjetaMedicina: View {
                     .fixedSize(horizontal: false, vertical: true)
                 if med.apodo != nil {
                     Text(med.nombreTecnico)
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(Paleta.tintaSuave)
                 }
                 Text([med.dosis, med.textoPauta].filter { !$0.isEmpty }.joined(separator: " · "))
                     .font(.body)
                     .foregroundStyle(Paleta.tinta)
                     .fixedSize(horizontal: false, vertical: true)
-                HStack(spacing: 12) {
-                    etiquetaAviso
-                    if let fin = med.fin {
-                        Label("Hasta el \(fin.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "es_MX"))))",
-                              systemImage: "calendar")
-                    }
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { etiquetas }
+                    VStack(alignment: .leading, spacing: 6) { etiquetas }
                 }
-                .font(.subheadline.weight(.semibold))
+                .font(.body.weight(.semibold))
                 .foregroundStyle(Paleta.tintaSuave)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -192,12 +197,12 @@ struct SeccionNotas: View {
                     HStack(alignment: .top, spacing: 12) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(nota.texto.capitalizedPrimera)
-                                .font(.system(.body, design: .serif))
+                                .font(.body)
                                 .foregroundStyle(Paleta.tinta)
                                 .fixedSize(horizontal: false, vertical: true)
                             Text("Receta del \(nota.fecha.formatted(.dateTime.day().month(.wide).locale(Locale(identifier: "es_MX"))))")
-                                .font(.subheadline)
-                                .foregroundStyle(Paleta.tintaSuave)
+                                .font(.body)
+                                .foregroundStyle(Paleta.tinta)
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         Button { Voz.decir(nota.texto) } label: {

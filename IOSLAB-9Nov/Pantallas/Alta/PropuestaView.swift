@@ -101,6 +101,14 @@ struct Borrador: Identifiable, Equatable {
         return duracionDias == 1 ? "1 día" : "\(duracionDias) días"
     }
 
+    /// "1 tableta · Con el desayuno y con la cena", para el resumen final.
+    var resumenCorto: String {
+        var cuando = textoMomentos
+        if let cadaHoras { cuando = cadaHoras == 1 ? "Cada hora" : "Cada \(cadaHoras) horas" }
+        else if let rangoHoras { cuando = "Cada \(rangoHoras.lowerBound) a \(rangoHoras.upperBound) horas" }
+        return [dosis, cuando].filter { !$0.isEmpty }.joined(separator: " · ")
+    }
+
     /// Lo que se lee en voz alta con 🔊.
     var lectura: String {
         var partes = [nombre]
@@ -140,18 +148,27 @@ struct Borrador: Identifiable, Equatable {
     }
 }
 
-/// Una revisión compartida para las medicinas y notas de la receta.
+/// Revisión de la receta: una medicina por pantalla y, al final, un resumen antes de guardar (RF-02).
+/// Nada se guarda hasta que la persona toca "Guardar plan" en el resumen.
 struct PropuestaView: View {
     let alTerminar: ([Medicamento]) -> Void
 
     @Environment(ModeloAlta.self) private var modelo
     @Environment(\.modelContext) private var contexto
+    @AppStorage(ClavesApp.leerEnVoz) private var leerEnVoz = false
     @State private var editando: Borrador?
     @State private var guardado = false
     @State private var omitidos: Set<UUID> = []
     @State private var notasQuitadas: Set<String> = []
     @State private var errorAlGuardar = false
     @State private var confirmarSinPendientes = false
+    /// Posición dentro de `revisables`; cuando llega al final se muestra el resumen.
+    @State private var paso = 0
+
+    /// Medicinas nuevas que se revisan una por una. Las ya registradas solo se mencionan en el resumen.
+    private var revisables: [Borrador] { modelo.borradores.filter { !$0.yaRegistrado } }
+    private var yaRegistradas: [Borrador] { modelo.borradores.filter(\.yaRegistrado) }
+    private var enResumen: Bool { paso >= revisables.count }
 
     private var elegibles: [Borrador] {
         modelo.borradores.filter { !$0.yaRegistrado && !omitidos.contains($0.id) }
@@ -163,6 +180,7 @@ struct PropuestaView: View {
 
     private var listos: [Borrador] { elegibles.filter { !$0.bloqueado } }
     private var pendientes: [Borrador] { elegibles.filter(\.bloqueado) }
+    private var fuera: [Borrador] { modelo.borradores.filter { omitidos.contains($0.id) } }
     private var hayPendientes: Bool { !pendientes.isEmpty }
     private var nombresPendientes: String {
         pendientes.map(\.nombre).formatted(.list(type: .and).locale(Locale(identifier: "es_MX")))
@@ -174,52 +192,16 @@ struct PropuestaView: View {
     }
 
     var body: some View {
-        PantallaPregunta(titulo: "Tu plan", subtitulo: "Revisa lo que encontramos. Toca Cambiar si algo no coincide.") {
-            if let consulta = modelo.consulta {
-                Label(consulta, systemImage: "checklist")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Paleta.tinta)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .tarjeta(relleno: 14, color: Paleta.salvia)
-            }
-            ForEach(Array(modelo.borradores.enumerated()), id: \.element.id) { i, borrador in
-                if omitidos.contains(borrador.id) {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("\(borrador.nombre): fuera de este plan.")
-                        BotonGrande(titulo: "Volver a incluir", estilo: .texto) { omitidos.remove(borrador.id) }
-                    }
-                    .tarjeta()
-                } else {
-                    tarjeta(i, borrador)
-                }
-            }
-            if !notasVisibles.isEmpty {
-                pantallaNotas
-            }
-        } botones: {
-            if hayPendientes && puedeGuardar {
-                VStack(alignment: .leading, spacing: 4) {
-                    ForEach(pendientes) { b in
-                        Label("\(b.nombre) quedará fuera porque \(b.motivoPendiente).", systemImage: "exclamationmark.circle")
-                            .fixedSize(horizontal: false, vertical: true)
-                    }
-                }
-                .font(.body)
-                .foregroundStyle(Paleta.tinta)
-                .frame(maxWidth: .infinity, alignment: .leading)
-            }
-            BotonGrande(titulo: tituloGuardar, icono: "checkmark") {
-                if hayPendientes { confirmarSinPendientes = true } else { guardar() }
-            }
-            .disabled(guardado || !puedeGuardar)
-            .confirmationDialog("¿Guardar sin \(nombresPendientes)?", isPresented: $confirmarSinPendientes,
-                                titleVisibility: .visible) {
-                Button(pendientes.count == 1 ? "Guardar sin ella" : "Guardar sin ellas", action: guardar)
-                Button("Seguir revisando", role: .cancel) {}
-            } message: {
-                Text("Podrás agregarlas después desde Agregar.")
+        Group {
+            if enResumen {
+                resumen
+            } else {
+                pantallaMedicina(revisables[paso])
             }
         }
+        .id(enResumen ? "resumen" : "medicina-\(paso)")
+        .transition(.opacity)
+        .animation(.easeInOut(duration: 0.25), value: paso)
         .sheet(item: $editando) { b in
             EditorBorrador(borrador: b) { nuevo in
                 if let j = modelo.borradores.firstIndex(where: { $0.id == nuevo.id }) {
@@ -230,39 +212,105 @@ struct PropuestaView: View {
         .alert("No pude guardar tu plan", isPresented: $errorAlGuardar) {
             Button("Entendido", role: .cancel) {}
         } message: {
-            Text("Tus cambios siguen en esta pantalla. Intenta guardar otra vez.")
+            Text("Tus cambios siguen aquí. Intenta guardar otra vez.")
         }
+        .onAppear(perform: leerSiToca)
+        .onChange(of: paso) { leerSiToca() }
         .onDisappear { Voz.callar() }
     }
 
-    private func tarjeta(_ i: Int, _ b: Borrador) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if b.yaRegistrado {
-                Label("\(b.nombre): ya la tienes registrada.", systemImage: "checkmark.seal.fill")
-                    .font(.headline)
-                    .foregroundStyle(Paleta.tomada)
-                    .tarjeta(relleno: 16, color: Paleta.tomadaFondo)
+    /// Con "Leer en voz alta" activado (Perfil), cada medicina se lee sola al aparecer.
+    private func leerSiToca() {
+        Voz.callar()
+        guard leerEnVoz, !enResumen else { return }
+        Voz.decir(revisables[paso].lectura)
+    }
+
+    private func avanzar() { paso = min(paso + 1, revisables.count) }
+
+    // MARK: Una medicina por pantalla
+
+    private func pantallaMedicina(_ b: Borrador) -> some View {
+        let total = revisables.count
+        let indice = modelo.borradores.firstIndex(where: { $0.id == b.id }) ?? 0
+        return PantallaPregunta(titulo: total == 1 ? "Revisa tu medicina" : "Medicina \(paso + 1) de \(total)",
+                                subtitulo: "Compárala con tu receta. Si algo no coincide, toca Corregir.",
+                                paso: total > 1 ? (paso + 1, total) : nil) {
+            if paso == 0, let consulta = modelo.consulta {
+                Label(consulta, systemImage: "checklist")
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Paleta.tinta)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .tarjeta(relleno: 16, color: Paleta.salvia)
+            }
+            if omitidos.contains(b.id) {
+                VStack(alignment: .leading, spacing: 12) {
+                    Text("\(b.nombre.capitalizedPrimera): no la voy a guardar.")
+                        .font(Tipo.tarjeta)
+                        .foregroundStyle(Paleta.tinta)
+                        .fixedSize(horizontal: false, vertical: true)
+                    BotonGrande(titulo: "Sí la quiero guardar", icono: "arrow.uturn.backward", estilo: .secundario) {
+                        omitidos.remove(b.id)
+                    }
+                }
+                .tarjeta(relleno: 20)
             } else {
                 TarjetaBorrador(borrador: b) {
-                    modelo.borradores[i].dudosos.remove("horario")
+                    modelo.borradores[indice].dudosos.remove("horario")
                 }
-                if b.cambioDe != nil { preguntaCambio(i, b) }
+                .id(b.id)
+                if b.cambioDe != nil { preguntaCambio(indice, b) }
                 if b.bloqueado {
-                    Label("Pendiente: \(b.motivoPendiente).", systemImage: "exclamationmark.circle")
+                    Label("Antes de guardarla: \(b.motivoPendiente).", systemImage: "exclamationmark.circle")
                         .font(.headline)
                         .foregroundStyle(Paleta.tinta)
-                    Text("Quedará fuera si guardas ahora.")
-                        .font(.body)
-                        .foregroundStyle(Paleta.tintaSuave)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .tarjeta(relleno: 16, color: Paleta.acentoSuave)
                 }
-                if !b.dudoso("condicion") {
-                    let accion = b.faltaElegirIntervalo ? "Elegir intervalo" : "Cambiar"
-                    BotonGrande(titulo: accion, icono: "pencil", estilo: .secundario) { editando = b }
-                        .accessibilityLabel("\(accion): \(b.nombre)")
-                }
-                BotonGrande(titulo: "Dejar fuera", estilo: .texto) { omitidos.insert(b.id) }
-                    .accessibilityLabel("Dejar fuera \(b.nombre)")
             }
+        } botones: {
+            botonesMedicina(b)
+        }
+    }
+
+    /// Qué botón resuelve lo que falta, cuando se resuelve corrigiendo.
+    /// Nil si se resuelve en la misma pantalla (confirmar horario, decidir si es cambio) o no tiene arreglo (condición).
+    private func accionPendiente(_ b: Borrador) -> String? {
+        guard b.bloqueado, !b.dudoso("condicion") else { return nil }
+        if b.faltaElegirIntervalo { return "Elegir cada cuántas horas" }
+        if b.faltaPrimeraVez { return "Elegir la primera vez" }
+        if b.cadaHoras == nil && b.momentos.isEmpty { return "Elegir cuándo" }
+        if b.soloConfirmarHorario || b.dudosos.isEmpty { return nil }
+        return "Corregir lo que está en amarillo"
+    }
+
+    @ViewBuilder private func botonesMedicina(_ b: Borrador) -> some View {
+        let ultimo = paso == revisables.count - 1
+        let siguiente = ultimo ? "Ver mi plan" : "Siguiente medicina"
+        if omitidos.contains(b.id) {
+            BotonGrande(titulo: siguiente, icono: "arrow.right") { avanzar() }
+        } else {
+            if let accion = accionPendiente(b) {
+                BotonGrande(titulo: accion, icono: "pencil") { editando = b }
+                    .accessibilityLabel("\(accion): \(b.nombre)")
+                BotonGrande(titulo: "Revisarla después", estilo: .texto) { avanzar() }
+            } else {
+                BotonGrande(titulo: b.bloqueado ? siguiente : (ultimo ? "Está bien, ver mi plan" : "Está bien, siguiente"),
+                            icono: b.bloqueado ? "arrow.right" : "checkmark") { avanzar() }
+                if !b.dudoso("condicion") {
+                    BotonGrande(titulo: "Corregir", icono: "pencil", estilo: .secundario) { editando = b }
+                        .accessibilityLabel("Corregir \(b.nombre)")
+                }
+            }
+            BotonGrande(titulo: "No la quiero guardar", estilo: .texto) {
+                omitidos.insert(b.id)
+                avanzar()
+            }
+            .accessibilityLabel("No guardar \(b.nombre)")
+        }
+        if paso > 0 {
+            BotonGrande(titulo: "Anterior", icono: "chevron.left", estilo: .texto) { paso -= 1 }
         }
     }
 
@@ -291,40 +339,147 @@ struct PropuestaView: View {
         .tarjeta(relleno: 18, color: Paleta.acentoSuave)
     }
 
-    private var pantallaNotas: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("Otros cuidados").font(Tipo.seccion).accessibilityAddTraits(.isHeader)
-            ForEach(notasVisibles, id: \.self) { nota in
-                HStack(alignment: .top, spacing: 12) {
-                    Image(systemName: "note.text")
-                        .font(.title3)
-                        .foregroundStyle(Paleta.tinta)
-                        .frame(width: 40, height: 40)
-                        .background(Circle().fill(Paleta.fondo))
-                        .accessibilityHidden(true)
-                    Text(nota.capitalizedPrimera)
-                        .font(.system(.title3, design: .serif))
-                        .foregroundStyle(Paleta.tinta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                    VStack(spacing: 6) {
-                        Button { Voz.decir(nota) } label: {
-                            Image(systemName: "speaker.wave.2")
-                                .frame(width: 44, height: 44)
-                        }
-                        .accessibilityLabel("Leer en voz alta")
-                        Button { notasQuitadas.insert(nota) } label: {
-                            Image(systemName: "xmark")
-                                .frame(width: 44, height: 44)
-                        }
-                        .accessibilityLabel("Quitar esta nota")
+    // MARK: Resumen final
+
+    private var resumen: some View {
+        let nada = elegibles.isEmpty && notasVisibles.isEmpty
+        return PantallaPregunta(titulo: "Tu plan",
+                                subtitulo: nada ? "No hay nada nuevo que guardar." : "Esto es lo que voy a guardar. Puedes revisar cualquiera.") {
+            if !listos.isEmpty {
+                grupo("Se guardan") {
+                    ForEach(listos) { b in
+                        filaResumen(b, detalle: b.resumenCorto, icono: "checkmark.circle.fill", color: Paleta.tomadaFondo)
                     }
-                    .font(.headline)
-                    .foregroundStyle(Paleta.tinta)
                 }
-                .tarjeta(relleno: 16, color: Paleta.sol.opacity(0.55))
+            }
+            if !pendientes.isEmpty {
+                grupo("Les falta algo") {
+                    ForEach(pendientes) { b in
+                        filaResumen(b, detalle: "Si guardas ahora, quedará fuera porque \(b.motivoPendiente).",
+                                    icono: "exclamationmark.circle", color: Paleta.acentoSuave)
+                    }
+                }
+            }
+            if !fuera.isEmpty {
+                grupo("No se guardan") {
+                    ForEach(fuera) { b in
+                        VStack(alignment: .leading, spacing: 10) {
+                            Text(b.nombre.capitalizedPrimera)
+                                .font(Tipo.tarjeta)
+                                .foregroundStyle(Paleta.tinta)
+                            BotonGrande(titulo: "Sí la quiero guardar", icono: "arrow.uturn.backward", estilo: .secundario) {
+                                omitidos.remove(b.id)
+                            }
+                        }
+                        .tarjeta(relleno: 18)
+                    }
+                }
+            }
+            if !yaRegistradas.isEmpty {
+                grupo("Ya las tienes") {
+                    ForEach(yaRegistradas) { b in
+                        Label(b.nombre.capitalizedPrimera, systemImage: "checkmark.seal.fill")
+                            .font(.headline)
+                            .foregroundStyle(Paleta.tinta)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .tarjeta(relleno: 16, color: Paleta.tomadaFondo)
+                    }
+                }
+            }
+            if !notasVisibles.isEmpty {
+                pantallaNotas
+            }
+        } botones: {
+            BotonGrande(titulo: tituloGuardar, icono: "checkmark") {
+                if hayPendientes { confirmarSinPendientes = true } else { guardar() }
+            }
+            .disabled(guardado || !puedeGuardar)
+            .confirmationDialog("¿Guardar sin \(nombresPendientes)?", isPresented: $confirmarSinPendientes,
+                                titleVisibility: .visible) {
+                Button(pendientes.count == 1 ? "Guardar sin ella" : "Guardar sin ellas", action: guardar)
+                Button("Seguir revisando", role: .cancel) {}
+            } message: {
+                Text("Podrás agregarlas después desde Agregar.")
+            }
+            if !revisables.isEmpty {
+                BotonGrande(titulo: "Revisar otra vez", icono: "arrow.uturn.backward", estilo: .texto) { paso = 0 }
             }
         }
+    }
+
+    private func grupo<C: View>(_ titulo: String, @ViewBuilder contenido: () -> C) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text(titulo)
+                .font(Tipo.seccion)
+                .foregroundStyle(Paleta.tinta)
+                .accessibilityAddTraits(.isHeader)
+            contenido()
+        }
+    }
+
+    private func filaResumen(_ b: Borrador, detalle: String, icono: String, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .top, spacing: 12) {
+                Image(systemName: icono)
+                    .font(.title3)
+                    .foregroundStyle(Paleta.tinta)
+                    .accessibilityHidden(true)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(b.nombre.capitalizedPrimera)
+                        .font(Tipo.tarjeta)
+                        .foregroundStyle(Paleta.tinta)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Text(detalle)
+                        .font(.body)
+                        .foregroundStyle(Paleta.tinta)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .accessibilityElement(children: .combine)
+            if let i = revisables.firstIndex(where: { $0.id == b.id }) {
+                BotonGrande(titulo: "Revisar", icono: "eye", estilo: .secundario) { paso = i }
+                    .accessibilityLabel("Revisar \(b.nombre)")
+            }
+        }
+        .tarjeta(relleno: 18, color: color)
+    }
+
+    private var pantallaNotas: some View {
+        grupo("Otros cuidados de tu receta") {
+            ForEach(notasVisibles, id: \.self) { nota in
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(alignment: .top, spacing: 12) {
+                        Image(systemName: "note.text")
+                            .font(.title3)
+                            .foregroundStyle(Paleta.tinta)
+                            .accessibilityHidden(true)
+                        Text(nota.capitalizedPrimera)
+                            .font(.title3)
+                            .foregroundStyle(Paleta.tinta)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                    }
+                    ViewThatFits(in: .horizontal) {
+                        HStack(spacing: 10) { botonesNota(nota) }
+                        VStack(alignment: .leading, spacing: 8) { botonesNota(nota) }
+                    }
+                }
+                .tarjeta(relleno: 18, color: Paleta.sol.opacity(0.55))
+            }
+        }
+    }
+
+    @ViewBuilder private func botonesNota(_ nota: String) -> some View {
+        Button { Voz.decir(nota) } label: {
+            Label("Leer", systemImage: "speaker.wave.2.fill").botonChico()
+        }
+        .buttonStyle(EstiloPresionable())
+        .accessibilityLabel("Leer esta nota en voz alta")
+        Button { notasQuitadas.insert(nota) } label: {
+            Label("No guardar esta nota", systemImage: "xmark").botonChico()
+        }
+        .buttonStyle(EstiloPresionable())
     }
 
     private func guardar() {
@@ -368,13 +523,33 @@ struct PropuestaView: View {
     }
 }
 
-/// Tarjeta de lectura de un borrador con 🔊 y campos dudosos en amarillo.
+private extension View {
+    /// Botón secundario pequeño en ancho, pero con texto legible y 52 pt de alto.
+    func botonChico() -> some View {
+        self.font(Tipo.etiqueta)
+            .foregroundStyle(Paleta.tinta)
+            .padding(.horizontal, 16)
+            .frame(minHeight: 52)
+            .background(Capsule().fill(Paleta.fondo))
+            .overlay(Capsule().strokeBorder(Paleta.borde, lineWidth: 1))
+    }
+}
+
+/// Tarjeta de una medicina propuesta: lo esencial a la vista y el resto en "Ver más".
+/// Los campos dudosos van en amarillo; si hay alguno, "Ver más" se abre solo.
 struct TarjetaBorrador: View {
     let borrador: Borrador
     /// Confirma con un toque el horario que propuso la IA a partir de la rutina.
     var alConfirmarHorario: (() -> Void)? = nil
 
     @Query private var perfiles: [Perfil]
+    @State private var mostrarMas: Bool
+
+    init(borrador: Borrador, alConfirmarHorario: (() -> Void)? = nil) {
+        self.borrador = borrador
+        self.alConfirmarHorario = alConfirmarHorario
+        _mostrarMas = State(initialValue: !borrador.dudosos.isEmpty)
+    }
 
     /// "Con el desayuno (8:00 a. m.) y con la cena (8:00 p. m.)", con las horas de la rutina.
     private var textoCuando: String {
@@ -383,8 +558,8 @@ struct TarjetaBorrador: View {
         }
         if let horas = borrador.cadaHoras {
             let frecuencia = horas == 1 ? "Cada hora" : "Cada \(horas) horas"
-            guard let inicio = borrador.inicioIntervalo else { return frecuencia + " · Falta la primera hora" }
-            return frecuencia + " · Empieza \(inicio.formatted(date: .abbreviated, time: .shortened))"
+            guard let inicio = borrador.inicioIntervalo else { return frecuencia + ". Falta la primera vez" }
+            return frecuencia + ". Empieza \(inicio.formatted(date: .abbreviated, time: .shortened))"
         }
         guard !borrador.momentos.isEmpty else { return "Sin horario" }
         let partes = borrador.momentos.map { m -> String in
@@ -399,37 +574,15 @@ struct TarjetaBorrador: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 18) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(borrador.nombre.isEmpty ? "Sin nombre" : borrador.nombre)
-                        .font(Tipo.titulo)
-                        .foregroundStyle(Paleta.tinta)
-                        .fixedSize(horizontal: false, vertical: true)
-                        .dudoso(borrador.dudoso("nombre"))
-                    if borrador.tipoAccion != .toma {
-                        Label(borrador.tipoAccion.titulo, systemImage: borrador.tipoAccion.icono)
-                            .font(.body.weight(.semibold))
-                            .foregroundStyle(Paleta.tinta)
-                    }
-                    if !borrador.concentracion.isEmpty || borrador.dudoso("concentracion") {
-                        Text(borrador.concentracion.isEmpty ? "¿Cuántos mg?" : borrador.concentracion)
-                            .font(.title3.weight(.semibold))
-                            .foregroundStyle(Paleta.marca)
-                            .dudoso(borrador.dudoso("concentracion"))
-                    }
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 12) {
+                    encabezado.frame(maxWidth: .infinity, alignment: .leading)
+                    botonLeer
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button {
-                    Voz.decir(borrador.lectura)
-                } label: {
-                    Image(systemName: "speaker.wave.2.fill")
-                        .font(.title2)
-                        .foregroundStyle(Paleta.marca)
-                        .frame(width: 60, height: 60)
-                        .background(Circle().fill(Paleta.marcaSuave))
+                VStack(alignment: .leading, spacing: 12) {
+                    encabezado
+                    botonLeer
                 }
-                .buttonStyle(EstiloPresionable())
-                .accessibilityLabel("Leer en voz alta")
             }
 
             Divider().overlay(Paleta.borde)
@@ -439,51 +592,93 @@ struct TarjetaBorrador: View {
                      valor: borrador.dosis.isEmpty ? "Falta la cantidad" : borrador.dosis,
                      dudoso: borrador.dudoso("dosis"))
             }
-            VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 12) {
                 dato(icono: "clock", titulo: "Cuándo",
                      valor: textoCuando,
                      dudoso: borrador.momentosDudosos)
                 if let motivo = borrador.motivoHorario, !motivo.isEmpty {
                     Label(motivo.capitalizedPrimera, systemImage: "sparkles")
-                        .font(.subheadline)
-                        .foregroundStyle(Paleta.tintaSuave)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                if borrador.soloConfirmarHorario, let alConfirmarHorario {
-                    Button(action: alConfirmarHorario) {
-                        Label("Sí, este horario me queda", systemImage: "checkmark")
-                            .font(Tipo.etiqueta)
-                            .foregroundStyle(Color.white)
-                            .padding(.horizontal, 16)
-                            .frame(minHeight: 48)
-                            .background(Capsule().fill(Paleta.marcaFuerte))
-                    }
-                    .buttonStyle(EstiloPresionable())
-                    .accessibilityLabel("Confirmar el horario de \(borrador.nombre)")
-                }
-            }
-            dato(icono: "calendar", titulo: "Por cuánto tiempo", valor: borrador.textoDuracion,
-                 dudoso: borrador.dudoso("duracionDias"))
-            if let indicaciones = borrador.indicaciones, !indicaciones.isEmpty {
-                dato(icono: "info.circle", titulo: "Indicaciones", valor: indicaciones.capitalizedPrimera, dudoso: false)
-            }
-            if let fuente = borrador.fuente {
-                // Explicación: de dónde salió la propuesta, con las palabras de la foto.
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("Esto dice tu foto").estiloMayusculas()
-                    Text("«\(fuente)»")
-                        .font(.system(.body, design: .serif))
-                        .italic()
+                        .font(.body)
                         .foregroundStyle(Paleta.tinta)
                         .fixedSize(horizontal: false, vertical: true)
                 }
-                .padding(14)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Paleta.fondo))
-                .accessibilityElement(children: .combine)
+                if borrador.soloConfirmarHorario, let alConfirmarHorario {
+                    BotonGrande(titulo: "Sí, este horario me queda", icono: "checkmark") { alConfirmarHorario() }
+                        .accessibilityLabel("Confirmar el horario de \(borrador.nombre)")
+                }
+            }
+
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { mostrarMas.toggle() }
+            } label: {
+                Label(mostrarMas ? "Ver menos" : "Ver más", systemImage: mostrarMas ? "chevron.up" : "chevron.down")
+                    .font(Tipo.etiqueta)
+                    .foregroundStyle(Paleta.tinta)
+                    .frame(maxWidth: .infinity, minHeight: 52)
+                    .overlay(Capsule().strokeBorder(Paleta.borde, lineWidth: 1.5))
+                    .contentShape(Capsule())
+            }
+            .buttonStyle(EstiloPresionable())
+            .accessibilityHint("Muestra cuántos días, las indicaciones y lo que dice tu foto")
+
+            if mostrarMas {
+                dato(icono: "calendar", titulo: "Por cuánto tiempo", valor: borrador.textoDuracion,
+                     dudoso: borrador.dudoso("duracionDias"))
+                if let indicaciones = borrador.indicaciones, !indicaciones.isEmpty {
+                    dato(icono: "info.circle", titulo: "Indicaciones", valor: indicaciones.capitalizedPrimera, dudoso: false)
+                }
+                if let fuente = borrador.fuente {
+                    // Explicación: de dónde salió la propuesta, con las palabras de la foto.
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text("Esto dice tu foto").estiloMayusculas()
+                        Text("«\(fuente)»")
+                            .font(.title3)
+                            .foregroundStyle(Paleta.tinta)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Paleta.fondo))
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
         .tarjeta(relleno: 22)
+    }
+
+    private var encabezado: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(borrador.nombre.isEmpty ? "Sin nombre" : borrador.nombre)
+                .font(Tipo.titulo)
+                .foregroundStyle(Paleta.tinta)
+                .fixedSize(horizontal: false, vertical: true)
+                .dudoso(borrador.dudoso("nombre"))
+            if borrador.tipoAccion != .toma {
+                Label(borrador.tipoAccion.titulo, systemImage: borrador.tipoAccion.icono)
+                    .font(.body.weight(.semibold))
+                    .foregroundStyle(Paleta.tinta)
+            }
+            if !borrador.concentracion.isEmpty || borrador.dudoso("concentracion") {
+                Text(borrador.concentracion.isEmpty ? "¿Cuántos mg?" : borrador.concentracion)
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(Paleta.marca)
+                    .dudoso(borrador.dudoso("concentracion"))
+            }
+        }
+    }
+
+    private var botonLeer: some View {
+        Button {
+            Voz.decir(borrador.lectura)
+        } label: {
+            Image(systemName: "speaker.wave.2.fill")
+                .font(.title2)
+                .foregroundStyle(Paleta.marca)
+                .frame(width: 60, height: 60)
+                .background(Circle().fill(Paleta.marcaSuave))
+        }
+        .buttonStyle(EstiloPresionable())
+        .accessibilityLabel("Leer en voz alta")
     }
 
     private func dato(icono: String, titulo: String, valor: String, dudoso: Bool) -> some View {
@@ -496,7 +691,7 @@ struct TarjetaBorrador: View {
                 .accessibilityHidden(true)
             VStack(alignment: .leading, spacing: 2) {
                 Text(titulo)
-                    .font(.subheadline.weight(.semibold))
+                    .font(.body.weight(.semibold))
                     .foregroundStyle(Paleta.tintaSuave)
                 Text(valor)
                     .font(.title3.weight(.semibold))
@@ -510,23 +705,32 @@ struct TarjetaBorrador: View {
     }
 }
 
-/// "Cambiar": corrige lo que leyó la IA. Al tocar "Listo", lo revisado deja de estar en amarillo.
+/// "Corregir": arregla lo que leyó la IA, en palabras sencillas. Al tocar "Listo", lo revisado deja de estar en amarillo.
 struct EditorBorrador: View {
     let alGuardar: (Borrador) -> Void
 
     @Environment(\.dismiss) private var cerrar
+    @Query private var perfiles: [Perfil]
     @State private var b: Borrador
     @State private var horas: String
     @State private var porHoras: Bool
     @State private var primeraVez: Date
+    /// La primera vez de una medicina "cada X horas" la elige la persona; no se adivina.
+    @State private var inicio: Inicio?
+
+    enum Inicio: Hashable { case ahora, enUnaHora, desayuno, otra }
 
     init(borrador: Borrador, alGuardar: @escaping (Borrador) -> Void) {
         self.alGuardar = alGuardar
         _b = State(initialValue: borrador)
         _horas = State(initialValue: borrador.cadaHoras.map { String($0) } ?? "")
         _porHoras = State(initialValue: borrador.tieneIntervalo)
-        let proximoMinuto = Calendar.current.dateInterval(of: .minute, for: .now)?.end ?? .now
-        _primeraVez = State(initialValue: borrador.inicioIntervalo ?? proximoMinuto)
+        _primeraVez = State(initialValue: borrador.inicioIntervalo ?? Self.proximoMinuto(.now))
+        _inicio = State(initialValue: borrador.inicioIntervalo == nil ? nil : .otra)
+    }
+
+    private static func proximoMinuto(_ fecha: Date) -> Date {
+        Calendar.current.dateInterval(of: .minute, for: fecha)?.end ?? fecha
     }
 
     private var intervaloValido: Int? {
@@ -534,7 +738,38 @@ struct EditorBorrador: View {
         return horas
     }
 
+    /// Mañana a la hora del desayuno de la rutina (8:00 si no hay rutina).
+    private var mananaDesayuno: Date {
+        let h = perfiles.first?.hora(de: .desayuno) ?? DateComponents(hour: 8, minute: 0)
+        let manana = Calendar.current.date(byAdding: .day, value: 1, to: .now) ?? .now
+        return Calendar.current.date(bySettingHour: h.hour ?? 8, minute: h.minute ?? 0, second: 0, of: manana) ?? manana
+    }
+
+    private var fechaInicio: Date? {
+        switch inicio {
+        case .ahora: Self.proximoMinuto(.now)
+        case .enUnaHora: Self.proximoMinuto(.now.addingTimeInterval(3600))
+        case .desayuno: mananaDesayuno
+        case .otra: Calendar.current.dateInterval(of: .minute, for: primeraVez)?.start ?? primeraVez
+        case nil: nil
+        }
+    }
+
+    /// Lo que falta para poder tocar "Listo", en palabras para la persona.
+    private var falta: String? {
+        if b.nombre.trimmingCharacters(in: .whitespaces).isEmpty { return "Falta el nombre." }
+        if b.tipoAccion == .toma && b.dosis.trimmingCharacters(in: .whitespaces).isEmpty { return "Falta cuánto tomas cada vez." }
+        if porHoras {
+            if intervaloValido == nil { return "Falta elegir cada cuántas horas." }
+            if fechaInicio == nil { return "Falta elegir cuándo es la primera vez." }
+        } else if b.momentos.isEmpty {
+            return "Falta elegir cuándo."
+        }
+        return nil
+    }
+
     private let dosisRapidas = ["½ tableta", "1 tableta", "2 tabletas", "1 cápsula"]
+    private let horasRapidas = [4, 6, 8, 12]
     private let duraciones: [Int?] = [nil, 7, 10, 14, 30]
     private let columnas = [GridItem(.flexible(), spacing: 12), GridItem(.flexible(), spacing: 12)]
 
@@ -543,23 +778,23 @@ struct EditorBorrador: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 28) {
                     if b.tieneIntervalo { pauta }
-                    seccion("Nombre") {
-                        campo("Losartán", texto: $b.nombre)
+                    seccion("¿Cómo se llama?") {
+                        campo("Por ejemplo, Losartán", texto: $b.nombre)
                     }
-                    seccion("Tipo de indicación") {
-                        Picker("Tipo de indicación", selection: $b.tipoAccion) {
-                            ForEach(TipoAccionPlan.allCases, id: \.self) { tipo in
-                                Text(tipo.titulo).tag(tipo)
-                            }
-                        }
-                        .pickerStyle(.inline)
+                    seccion("¿Qué es?") {
+                        ChipSeleccion(titulo: "Una pastilla, jarabe o algo que tomo", icono: TipoAccionPlan.toma.icono,
+                                      elegido: b.tipoAccion == .toma) { b.tipoAccion = .toma }
+                        ChipSeleccion(titulo: "Una crema, gotas o algo que me pongo", icono: TipoAccionPlan.aplicacion.icono,
+                                      elegido: b.tipoAccion == .aplicacion) { b.tipoAccion = .aplicacion }
+                        ChipSeleccion(titulo: "Algo que hago, como caminar o medir mi presión", icono: TipoAccionPlan.cuidado.icono,
+                                      elegido: b.tipoAccion == .cuidado) { b.tipoAccion = .cuidado }
                     }
                     if b.tipoAccion != .cuidado {
-                        seccion("Concentración") {
-                            campo("50 mg", texto: $b.concentracion)
+                        seccion("¿De cuántos miligramos? (si lo sabes)") {
+                            campo("Por ejemplo, 50 mg", texto: $b.concentracion)
                         }
                     }
-                    seccion(b.tipoAccion == .toma ? "¿Cuánto usas cada vez?" : "Cantidad, si la receta la indica") {
+                    seccion(b.tipoAccion == .toma ? "¿Cuánto tomas cada vez?" : "¿Cuánto? (si la receta lo dice)") {
                         if b.tipoAccion == .toma {
                             LazyVGrid(columns: columnas, spacing: 12) {
                                 ForEach(dosisRapidas, id: \.self) { d in
@@ -567,7 +802,7 @@ struct EditorBorrador: View {
                                 }
                             }
                         }
-                        campo("Otra cantidad", texto: $b.dosis)
+                        campo("Escribe otra cantidad", texto: $b.dosis)
                     }
                     if !b.tieneIntervalo { pauta }
                     seccion("¿Por cuántos días?") {
@@ -578,11 +813,22 @@ struct EditorBorrador: View {
                             }
                         }
                     }
+                    VStack(alignment: .leading, spacing: 12) {
+                        if let falta {
+                            Label(falta, systemImage: "exclamationmark.circle")
+                                .font(.headline)
+                                .foregroundStyle(Paleta.tinta)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        BotonGrande(titulo: "Listo", icono: "checkmark") { listo() }
+                            .disabled(falta != nil)
+                        BotonGrande(titulo: "Cancelar", estilo: .texto) { cerrar() }
+                    }
                 }
                 .padding(24)
             }
             .background(Paleta.fondo.ignoresSafeArea())
-            .navigationTitle("Cambiar")
+            .navigationTitle("Corregir")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
@@ -591,9 +837,7 @@ struct EditorBorrador: View {
                 ToolbarItem(placement: .confirmationAction) {
                     Button("Listo") { listo() }
                         .fontWeight(.bold)
-                        .disabled(b.nombre.trimmingCharacters(in: .whitespaces).isEmpty
-                                  || (b.tipoAccion == .toma && b.dosis.trimmingCharacters(in: .whitespaces).isEmpty)
-                                  || (porHoras ? intervaloValido == nil : b.momentos.isEmpty))
+                        .disabled(falta != nil)
                 }
             }
         }
@@ -603,12 +847,15 @@ struct EditorBorrador: View {
     private var pauta: some View {
         seccion("¿Cuándo?") {
             if b.tipoAccion != .toma && b.rangoHoras == nil {
+                ChipSeleccion(titulo: "Con mis comidas o al dormir", icono: "sun.max", elegido: !porHoras) { porHoras = false }
                 ChipSeleccion(titulo: "Cada cierto número de horas", icono: "clock", elegido: porHoras) { porHoras = true }
-                ChipSeleccion(titulo: "En momentos del día", icono: "sun.max", elegido: !porHoras) { porHoras = false }
             }
             if porHoras {
                 if let rango = b.rangoHoras {
-                    Text("La receta dice cada \(rango.lowerBound) a \(rango.upperBound) horas.")
+                    Text("Tu receta dice cada \(rango.lowerBound) a \(rango.upperBound) horas. Elige una:")
+                        .font(.body)
+                        .foregroundStyle(Paleta.tinta)
+                        .fixedSize(horizontal: false, vertical: true)
                     if rango.upperBound - rango.lowerBound < 6 {
                         ForEach(rango, id: \.self) { intervalo in
                             let valor = String(intervalo)
@@ -616,12 +863,30 @@ struct EditorBorrador: View {
                                           elegido: horas == valor) { horas = valor }
                         }
                     } else {
-                        campo("Horas dentro del rango", texto: $horas).keyboardType(.numberPad)
+                        campo("Número de horas", texto: $horas).keyboardType(.numberPad)
                     }
                 } else {
-                    campo("Horas entre cada vez", texto: $horas).keyboardType(.numberPad)
+                    subtitulo("¿Cada cuántas horas?")
+                    LazyVGrid(columns: columnas, spacing: 12) {
+                        ForEach(horasRapidas, id: \.self) { h in
+                            ChipSeleccion(titulo: "Cada \(h) horas", elegido: horas == String(h)) { horas = String(h) }
+                        }
+                    }
+                    campo("Otro número de horas", texto: $horas).keyboardType(.numberPad)
                 }
-                DatePicker("Primera vez", selection: $primeraVez)
+                subtitulo("¿Cuándo es la primera vez?")
+                ChipSeleccion(titulo: "Ahora", icono: "clock", elegido: inicio == .ahora) { inicio = .ahora }
+                ChipSeleccion(titulo: "En 1 hora", icono: "clock.arrow.circlepath", elegido: inicio == .enUnaHora) { inicio = .enUnaHora }
+                ChipSeleccion(titulo: "Mañana con el desayuno (\(mananaDesayuno.formatted(date: .omitted, time: .shortened)))",
+                              icono: Momento.desayuno.icono, elegido: inicio == .desayuno) { inicio = .desayuno }
+                ChipSeleccion(titulo: "Otro día u hora", icono: "calendar", elegido: inicio == .otra) { inicio = .otra }
+                if inicio == .otra {
+                    DatePicker("Primera vez", selection: $primeraVez)
+                        .datePickerStyle(.wheel)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
+                        .environment(\.locale, Locale(identifier: "es_MX"))
+                }
             } else {
                 LazyVGrid(columns: columnas, spacing: 12) {
                     ForEach(Momento.rutina, id: \.self) { m in
@@ -632,11 +897,20 @@ struct EditorBorrador: View {
         }
     }
 
+    private func subtitulo(_ texto: String) -> some View {
+        Text(texto)
+            .font(.title3.weight(.semibold))
+            .foregroundStyle(Paleta.tinta)
+            .padding(.top, 6)
+            .accessibilityAddTraits(.isHeader)
+    }
+
     private func seccion<C: View>(_ titulo: String, @ViewBuilder contenido: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             Text(titulo)
                 .font(Tipo.seccion)
                 .foregroundStyle(Paleta.tinta)
+                .fixedSize(horizontal: false, vertical: true)
                 .accessibilityAddTraits(.isHeader)
             contenido()
         }
@@ -664,6 +938,7 @@ struct EditorBorrador: View {
     private func orden(_ m: Momento) -> Int { Momento.rutina.firstIndex(of: m) ?? 99 }
 
     private func listo() {
+        guard falta == nil else { return }
         b.nombre = b.nombre.trimmingCharacters(in: .whitespaces)
         b.concentracion = b.concentracion.trimmingCharacters(in: .whitespaces)
         b.dosis = b.dosis.trimmingCharacters(in: .whitespaces)
@@ -672,10 +947,10 @@ struct EditorBorrador: View {
         if !b.nombre.isEmpty { revisado.insert("nombre") }
         if !b.dosis.isEmpty || b.tipoAccion != .toma { revisado.insert("dosis") }
         if !b.momentos.isEmpty { revisado.formUnion(["momentos", "cadaHoras", "horario"]) }
-        if porHoras, let intervaloValido {
+        if porHoras, let intervaloValido, let fechaInicio {
             b.cadaHoras = intervaloValido
             b.momentos = []
-            b.inicioIntervalo = Calendar.current.dateInterval(of: .minute, for: primeraVez)?.start ?? primeraVez
+            b.inicioIntervalo = fechaInicio
             revisado.formUnion(["momentos", "cadaHoras", "horario"])
         } else {
             b.cadaHoras = nil

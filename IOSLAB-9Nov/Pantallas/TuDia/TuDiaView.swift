@@ -10,6 +10,7 @@ struct TuDiaView: View {
     @Query private var registros: [RegistroToma]
     @Query(sort: \NotaReceta.fecha, order: .reverse) private var notas: [NotaReceta]
     @State private var control = ControlTomas()
+    @Environment(\.dynamicTypeSize) private var tamano
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 30)) { linea in
@@ -33,7 +34,7 @@ struct TuDiaView: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Text("Con una foto de tu receta armo tu día.")
                             .font(.body)
-                            .foregroundStyle(Paleta.tinta.opacity(0.8))
+                            .foregroundStyle(Paleta.tinta)
                             .fixedSize(horizontal: false, vertical: true)
                         BotonFlecha(etiqueta: "Agregar medicina") { navegacion.pestana = .escanear }
                             .padding(.top, 6)
@@ -91,7 +92,7 @@ struct TuDiaView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(urgente.detalle) · \(urgente.hora)")
                     .font(.body)
-                    .foregroundStyle(Paleta.tinta.opacity(0.8))
+                    .foregroundStyle(Paleta.tinta)
                     .fixedSize(horizontal: false, vertical: true)
                 if urgente.med.tipoAccion == .cuidado, let indicaciones = urgente.med.indicaciones, !indicaciones.isEmpty {
                     Text(indicaciones.capitalizedPrimera)
@@ -118,7 +119,7 @@ struct TuDiaView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("\(siguiente.hora) · \(siguiente.toma.momento.texto)")
                     .font(.body)
-                    .foregroundStyle(Paleta.tinta.opacity(0.8))
+                    .foregroundStyle(Paleta.tinta)
                     .fixedSize(horizontal: false, vertical: true)
             }
             .onTapGesture { control.elegida = siguiente }
@@ -128,7 +129,7 @@ struct TuDiaView: View {
                 Text("Listo por hoy").font(Tipo.titulo).foregroundStyle(Paleta.tinta)
                 Text("Ya registraste todo lo de hoy.")
                     .font(.body)
-                    .foregroundStyle(Paleta.tinta.opacity(0.8))
+                    .foregroundStyle(Paleta.tinta)
                     .fixedSize(horizontal: false, vertical: true)
             }
         } else {
@@ -138,21 +139,31 @@ struct TuDiaView: View {
                     .fixedSize(horizontal: false, vertical: true)
                 Text("Revisa los próximos días en Calendario.")
                     .font(.body)
-                    .foregroundStyle(Paleta.tinta.opacity(0.8))
+                    .foregroundStyle(Paleta.tinta)
             }
         }
+    }
+
+    private func cuenta(_ hechas: Int, de total: Int) -> some View {
+        Text("\(hechas) de \(total) registradas")
+            .font(.body.weight(.semibold))
+            .foregroundStyle(Paleta.tinta)
+            .contentTransition(.numericText())
     }
 
     private func progreso(_ hoy: [TomaDelDia], ahora: Date) -> some View {
         let hechas = hoy.filter { $0.estado(ahora: ahora).registrada }.count
         return VStack(alignment: .leading, spacing: 10) {
-            HStack(alignment: .firstTextBaseline) {
-                Text("Hoy").font(Tipo.tarjeta).foregroundStyle(Paleta.tinta)
-                Spacer()
-                Text("\(hechas) de \(hoy.count) registradas")
-                    .font(.body.weight(.semibold))
-                    .foregroundStyle(Paleta.tintaSuave)
-                    .contentTransition(.numericText())
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .firstTextBaseline) {
+                    Text("Hoy").font(Tipo.tarjeta).foregroundStyle(Paleta.tinta)
+                    Spacer()
+                    cuenta(hechas, de: hoy.count)
+                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("Hoy").font(Tipo.tarjeta).foregroundStyle(Paleta.tinta)
+                    cuenta(hechas, de: hoy.count)
+                }
             }
             GeometryReader { g in
                 ZStack(alignment: .leading) {
@@ -186,7 +197,7 @@ struct TuDiaView: View {
                 HStack(alignment: .top, spacing: 12) {
                     Image(systemName: "note.text").foregroundStyle(Paleta.tinta).accessibilityHidden(true)
                     Text(nota.texto.capitalizedPrimera)
-                        .font(.system(.body, design: .serif))
+                        .font(.body)
                         .foregroundStyle(Paleta.tinta)
                         .fixedSize(horizontal: false, vertical: true)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -212,21 +223,25 @@ struct TuDiaView: View {
                 ForEach(Array(siguientes.enumerated()), id: \.element.id) { i, t in
                     if i > 0 { Divider() }
                     Button { control.elegida = t } label: {
-                        HStack(spacing: 14) {
+                        let fila = tamano.isAccessibilitySize
+                            ? AnyLayout(VStackLayout(alignment: .leading, spacing: 8))
+                            : AnyLayout(HStackLayout(spacing: 14))
+                        fila {
                             IconoMedicamento(t.med, tamano: 46)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(t.med.nombreVisible.capitalizedPrimera)
                                     .font(.system(.title3, design: .serif, weight: .semibold))
                                     .foregroundStyle(Paleta.tinta)
+                                    .fixedSize(horizontal: false, vertical: true)
                                 Text(t.med.dosis)
-                                    .font(.subheadline)
+                                    .font(.body)
                                     .foregroundStyle(Paleta.tintaSuave)
                             }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
+                            if !tamano.isAccessibilitySize { Spacer() }
+                            VStack(alignment: tamano.isAccessibilitySize ? .leading : .trailing, spacing: 2) {
                                 Text(t.hora).font(Tipo.etiqueta).foregroundStyle(Paleta.tinta)
                                 if !Calendar.current.isDate(t.toma.fecha, inSameDayAs: ahora) {
-                                    Text("Mañana").font(.subheadline).foregroundStyle(Paleta.tintaSuave)
+                                    Text("Mañana").font(.body).foregroundStyle(Paleta.tintaSuave)
                                 }
                             }
                         }
@@ -260,15 +275,26 @@ struct TarjetaPastel<Texto: View, Abajo: View>: View {
         self.abajo = abajo()
     }
 
+    @Environment(\.dynamicTypeSize) private var tamano
+
     var body: some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack(alignment: .center, spacing: 12) {
+            if tamano.isAccessibilitySize {
+                // Con letra muy grande, el dibujo va arriba y más chico para que el texto ocupe todo el ancho.
+                if let icono {
+                    IconoMedicamento(icono, tamano: 64)
+                }
                 VStack(alignment: .leading, spacing: 8) { texto }
                     .frame(maxWidth: .infinity, alignment: .leading)
-                if let ilustracion {
-                    ilustracion.frame(width: 120)
-                } else if let icono {
-                    IconoMedicamento(icono, tamano: 84)
+            } else {
+                HStack(alignment: .center, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 8) { texto }
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                    if let ilustracion {
+                        ilustracion.frame(width: 120)
+                    } else if let icono {
+                        IconoMedicamento(icono, tamano: 84)
+                    }
                 }
             }
             if Abajo.self != EmptyView.self { abajo }
@@ -292,34 +318,31 @@ struct SemanaPrevia: View {
     let resumen: (Date) -> ResumenCalendario
     let alAbrir: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var tamano
+    private var lado: CGFloat { tamano.isAccessibilitySize ? 60 : 36 }
+
     var body: some View {
         Button(action: alAbrir) {
             VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Esta semana").font(Tipo.tarjeta).foregroundStyle(Paleta.tinta)
-                    Spacer()
-                    Text("Ver calendario")
-                        .font(.body.weight(.semibold))
-                        .foregroundStyle(Paleta.tinta)
-                        .underline()
-                    Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundStyle(Paleta.tinta)
-                }
-                HStack(spacing: 0) {
-                    ForEach(Agenda.semana(de: hoy), id: \.self) { d in
-                        let esHoy = Calendar.current.isDate(d, inSameDayAs: hoy)
-                        VStack(spacing: 6) {
-                            Text(d.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "es_MX"))).uppercased())
-                                .font(.caption.weight(.semibold))
-                                .foregroundStyle(Paleta.tintaSuave)
-                            Text(d.formatted(.dateTime.day()))
-                                .font(.system(.body, design: .serif, weight: .semibold))
-                                .foregroundStyle(esHoy ? Color.white : Paleta.tinta)
-                                .frame(width: 36, height: 36)
-                                .background { if esHoy { Circle().fill(Paleta.marcaFuerte) } }
-                            MarcaDia(resumen: resumen(d)).frame(height: 8)
-                        }
-                        .frame(maxWidth: .infinity)
+                ViewThatFits(in: .horizontal) {
+                    HStack {
+                        titulo
+                        Spacer()
+                        verCalendario
                     }
+                    VStack(alignment: .leading, spacing: 6) {
+                        titulo
+                        verCalendario
+                    }
+                }
+                if tamano.isAccessibilitySize {
+                    // Con letra muy grande se muestran ayer, hoy y los dos días siguientes.
+                    let semana = Agenda.semana(de: hoy)
+                    let i = semana.firstIndex { Calendar.current.isDate($0, inSameDayAs: hoy) } ?? 0
+                    let visibles = Array(semana[max(0, i - 1)..<min(semana.count, i + 3)])
+                    HStack(spacing: 0) { ForEach(visibles, id: \.self) { dia($0) } }
+                } else {
+                    HStack(spacing: 0) { ForEach(Agenda.semana(de: hoy), id: \.self) { dia($0) } }
                 }
             }
             .padding(.vertical, 4)
@@ -329,6 +352,37 @@ struct SemanaPrevia: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Esta semana. Abre el calendario")
         .accessibilityAddTraits(.isButton)
+    }
+
+    private var titulo: some View {
+        Text("Esta semana").font(Tipo.tarjeta).foregroundStyle(Paleta.tinta)
+    }
+
+    private var verCalendario: some View {
+        HStack(spacing: 6) {
+            Text("Ver calendario")
+                .font(.body.weight(.semibold))
+                .underline()
+            Image(systemName: "chevron.right").font(.body.weight(.semibold))
+        }
+        .foregroundStyle(Paleta.tinta)
+    }
+
+    private func dia(_ d: Date) -> some View {
+        let esHoy = Calendar.current.isDate(d, inSameDayAs: hoy)
+        return VStack(spacing: 6) {
+            Text(d.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "es_MX"))).uppercased())
+                .font(.body.weight(.semibold))
+                .foregroundStyle(Paleta.tintaSuave)
+            Text(d.formatted(.dateTime.day()))
+                .font(.system(.body, design: .serif, weight: .semibold))
+                .minimumScaleFactor(0.7)
+                .foregroundStyle(esHoy ? Color.white : Paleta.tinta)
+                .frame(width: lado, height: lado)
+                .background { if esHoy { Circle().fill(Paleta.marcaFuerte) } }
+            MarcaDia(resumen: resumen(d)).frame(height: 8)
+        }
+        .frame(maxWidth: .infinity)
     }
 }
 
@@ -473,7 +527,7 @@ final class ControlTomas {
         tarea?.cancel()
         deshacer = aviso
         tarea = Task { [weak self] in
-            try? await Task.sleep(for: .seconds(10))
+            try? await Task.sleep(for: .seconds(30))
             guard !Task.isCancelled else { return }
             self?.deshacer = nil
         }
@@ -532,7 +586,7 @@ struct FilaToma: View {
                             .fixedSize(horizontal: false, vertical: true)
                         Text([toma.med.dosis, toma.hora].filter { !$0.isEmpty }.joined(separator: " · "))
                             .font(.body)
-                            .foregroundStyle(Paleta.tinta.opacity(0.75))
+                            .foregroundStyle(Paleta.tinta)
                         ChipEstado(estado: estado, tipoAccion: toma.med.tipoAccion)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -573,7 +627,8 @@ struct ChipEstado: View {
 
     var body: some View {
         Label(texto, systemImage: icono)
-            .font(.subheadline.weight(.semibold))
+            .font(.body.weight(.semibold))
+            .fixedSize(horizontal: false, vertical: true)
             .foregroundStyle(primerPlano)
             .padding(.horizontal, 10)
             .padding(.vertical, 4)
@@ -622,13 +677,30 @@ struct ChipEstado: View {
     }
 }
 
-/// Aviso de 10 s con "Deshacer" (RF-06).
+/// Aviso de 30 s con "Deshacer" (RF-06).
 struct BarraDeshacer: View {
     let aviso: AvisoDeshacer
     let alDeshacer: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 12) {
+                mensaje
+                botonDeshacer
+            }
+            VStack(alignment: .leading, spacing: 10) {
+                mensaje
+                botonDeshacer
+            }
+        }
+        .padding(.horizontal, 18)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Paleta.marcaFuerte))
+        .shadow(color: Color.black.opacity(0.18), radius: 16, y: 6)
+    }
+
+    private var mensaje: some View {
+        HStack(alignment: .top, spacing: 12) {
             Image(systemName: "checkmark.circle.fill")
                 .font(.title3)
                 .foregroundStyle(Paleta.acento)
@@ -638,15 +710,20 @@ struct BarraDeshacer: View {
                 .foregroundStyle(Color.white)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
-            Button("Deshacer", action: alDeshacer)
-                .font(Tipo.etiqueta)
-                .foregroundStyle(Paleta.acento)
-                .frame(minWidth: 44, minHeight: 44)
         }
-        .padding(.horizontal, 18)
-        .padding(.vertical, 10)
-        .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(Paleta.marcaFuerte))
-        .shadow(color: Color.black.opacity(0.18), radius: 16, y: 6)
+    }
+
+    /// Botón grande y claro: la persona tiene 30 segundos para arrepentirse.
+    private var botonDeshacer: some View {
+        Button(action: alDeshacer) {
+            Label("Deshacer", systemImage: "arrow.uturn.backward")
+                .font(Tipo.etiqueta)
+                .foregroundStyle(Paleta.tinta)
+                .padding(.horizontal, 18)
+                .frame(minHeight: 52)
+                .background(Capsule().fill(Color.white))
+        }
+        .buttonStyle(EstiloPresionable())
     }
 }
 

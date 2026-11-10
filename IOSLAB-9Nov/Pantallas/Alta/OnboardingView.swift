@@ -8,7 +8,7 @@ struct OnboardingView: View {
     let alTerminar: (_ agregarAhora: Bool) -> Void
 
     private enum Paso: Int, CaseIterable {
-        case hola, receta, aviso, dia, nombre, rutina, listo
+        case hola, receta, aviso, dia, letra, nombre, rutina, listo
     }
 
     @Environment(\.modelContext) private var contexto
@@ -90,8 +90,8 @@ struct OnboardingView: View {
                 .accessibilityLabel("Atrás")
             }
             Spacer()
-            if paso.rawValue < Paso.nombre.rawValue {
-                Button("Saltar") { ir(.nombre) }
+            if paso.rawValue < Paso.letra.rawValue {
+                Button("Saltar") { ir(.letra) }
                     .font(Tipo.etiqueta)
                     .foregroundStyle(Paleta.tintaSuave)
                     .frame(minHeight: 48)
@@ -152,6 +152,8 @@ struct OnboardingView: View {
                          alto: ilusAlto,
                          titulo: "Tu día en una vista",
                          texto: "Ves qué te toca, qué ya tomaste y qué sigue. Sin cuenta ni contraseña: todo se queda en tu iPhone.") { EmptyView() }
+        case .letra:
+            preguntaLetra
         case .nombre:
             preguntaNombre(ilusAlto: max(220, alto * 0.4))
         case .rutina:
@@ -180,6 +182,34 @@ struct OnboardingView: View {
             extra()
         }
         .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// Tamaño de letra: cada opción se ve con su tamaño y la vista previa cambia al momento.
+    private var preguntaLetra: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("¿De qué tamaño lees mejor?")
+                .font(Tipo.pregunta)
+                .foregroundStyle(Paleta.tinta)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityAddTraits(.isHeader)
+            Text("Toca una opción y mira cómo cambia. Puedes cambiarlo después en Perfil.")
+                .font(.title3)
+                .foregroundStyle(Paleta.tintaSuave)
+                .fixedSize(horizontal: false, vertical: true)
+            SelectorTamanoLetra()
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Así se verá").estiloMayusculas()
+                Text("La de la presión")
+                    .font(Tipo.tarjeta)
+                    .foregroundStyle(Paleta.tinta)
+                Text("1 tableta · con el desayuno, 8:00 a. m.")
+                    .font(.body)
+                    .foregroundStyle(Paleta.tinta)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .tarjeta(relleno: 20, color: Paleta.durazno)
+            .accessibilityElement(children: .combine)
+        }
     }
 
     private func preguntaNombre(ilusAlto: CGFloat) -> some View {
@@ -335,7 +365,7 @@ struct BotonVoz: View {
                         .frame(width: 44, height: 44)
                         .background(Circle().fill(dictado.escuchando ? Paleta.acento : Paleta.marcaSuave))
                         .symbolEffect(.pulse, isActive: dictado.escuchando)
-                    Text(dictado.escuchando ? "Te escucho… toca para terminar"
+                    Text(dictado.escuchando ? "Te escucho… cuando dejes de hablar, me detengo solo"
                          : dictado.transcribiendo ? "Entendiendo lo que dijiste…" : titulo)
                         .font(Tipo.etiqueta)
                         .foregroundStyle(Paleta.tinta)
@@ -348,14 +378,14 @@ struct BotonVoz: View {
             }
             .buttonStyle(EstiloPresionable())
             .disabled(dictado.transcribiendo)
-            .accessibilityHint(dictado.escuchando ? "Toca para terminar de grabar" : "Toca para responder hablando")
+            .accessibilityHint(dictado.escuchando ? "Se detiene solo al terminar de hablar. También puedes tocar para terminar" : "Toca para responder hablando")
             if let error = dictado.error {
                 Label(error, systemImage: "exclamationmark.circle")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(Paleta.tintaSuave)
             } else if let ayuda {
                 Text(ayuda)
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(Paleta.tintaSuave)
             }
         }

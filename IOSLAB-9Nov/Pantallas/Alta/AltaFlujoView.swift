@@ -161,7 +161,7 @@ struct AltaFlujoView: View {
                 paso("2", "DeepSeek ordena ese texto por internet: nombre, dosis y horario.")
                 paso("3", "Reviso que cada dato esté escrito en la foto; lo que no encuentro te lo marco en amarillo.")
                 Label("DeepSeek recibe el texto de tu receta, que puede incluir tu nombre, y datos de tus medicinas y rutina. La foto se queda en el iPhone. Puedes cambiarlo en Perfil.", systemImage: "network")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(Paleta.tintaSuave)
                     .padding(.top, 4)
             } else {
@@ -169,7 +169,7 @@ struct AltaFlujoView: View {
                 paso("2", "Apple Intelligence lo ordena: nombre, dosis y horario.")
                 paso("3", "Reviso que cada dato esté escrito en la foto; lo que no encuentro te lo marco en amarillo.")
                 Label("Todo pasa en tu iPhone, sin internet. Nada sale de tu teléfono.", systemImage: "lock")
-                    .font(.subheadline)
+                    .font(.body)
                     .foregroundStyle(Paleta.tintaSuave)
                     .padding(.top, 4)
             }
@@ -180,7 +180,7 @@ struct AltaFlujoView: View {
     private func paso(_ n: String, _ texto: String) -> some View {
         HStack(alignment: .top, spacing: 12) {
             Text(n)
-                .font(.subheadline.weight(.bold))
+                .font(.body.weight(.bold))
                 .foregroundStyle(Paleta.tinta)
                 .frame(width: 28, height: 28)
                 .background(Circle().fill(Paleta.fondo))
@@ -251,6 +251,8 @@ struct TarjetaCamino: View {
     var habilitada = true
     let accion: () -> Void
 
+    @Environment(\.dynamicTypeSize) private var tamano
+
     var body: some View {
         Button(action: accion) {
             HStack(alignment: .bottom, spacing: 0) {
@@ -261,19 +263,30 @@ struct TarjetaCamino: View {
                         .fixedSize(horizontal: false, vertical: true)
                     Text(detalle)
                         .font(.body)
-                        .foregroundStyle(Paleta.tinta.opacity(0.8))
+                        .foregroundStyle(Paleta.tinta)
                         .fixedSize(horizontal: false, vertical: true)
-                    Image(systemName: "arrow.right")
-                        .font(.headline)
-                        .foregroundStyle(Color.white)
-                        .frame(width: 44, height: 44)
-                        .background(Circle().fill(Paleta.marcaFuerte))
-                        .padding(.top, 6)
-                        .accessibilityHidden(true)
+                    if habilitada {
+                        Image(systemName: "arrow.right")
+                            .font(.headline)
+                            .foregroundStyle(Color.white)
+                            .frame(width: 44, height: 44)
+                            .background(Circle().fill(Paleta.marcaFuerte))
+                            .padding(.top, 6)
+                            .accessibilityHidden(true)
+                    } else {
+                        // En lugar de atenuar el texto (difícil de leer), se dice por qué no está disponible.
+                        Label("Ahora no está disponible. Puedes escribirla tú.", systemImage: "info.circle")
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Paleta.tinta)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .padding(.top, 6)
+                    }
                 }
                 .frame(maxWidth: .infinity, alignment: .leading)
-                ilustracion
-                    .frame(width: 130)
+                if !tamano.isAccessibilitySize {
+                    ilustracion
+                        .frame(width: 130)
+                }
             }
             .padding(22)
             .frame(maxWidth: .infinity, minHeight: 170, alignment: .leading)
@@ -282,7 +295,7 @@ struct TarjetaCamino: View {
         }
         .buttonStyle(EstiloPresionable())
         .disabled(!habilitada)
-        .opacity(habilitada ? 1 : 0.45)
+        .saturation(habilitada ? 1 : 0)
         .accessibilityElement(children: .combine)
         .accessibilityHint(habilitada ? "" : "No disponible ahora")
     }

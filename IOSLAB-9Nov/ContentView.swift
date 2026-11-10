@@ -24,6 +24,7 @@ struct ContentView: View {
         }
         .tint(Paleta.tinta)
         .preferredColorScheme(.light)
+        .tamanoLetraElegido()
     }
 }
 

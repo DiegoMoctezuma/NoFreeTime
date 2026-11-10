@@ -121,31 +121,66 @@ struct CalendarioSemana: View {
     let hoy: Date
     let resumen: (Date) -> ResumenCalendario
 
+    @Environment(\.dynamicTypeSize) private var tamano
     private var cal: Calendar { Agenda.calendario }
+    private var lado: CGFloat { tamano.isAccessibilitySize ? 64 : 44 }
 
     var body: some View {
         VStack(spacing: 16) {
-            HStack(spacing: 8) {
-                Text(seleccion.formatted(.dateTime.month(.wide).year().locale(Locale(identifier: "es_MX"))).capitalizedPrimera)
-                    .font(Tipo.seccion)
-                    .foregroundStyle(Paleta.tinta)
-                Spacer()
-                if !cal.isDate(seleccion, inSameDayAs: hoy) {
-                    Button("Hoy") { withAnimation(.snappy) { seleccion = cal.startOfDay(for: hoy) } }
-                        .font(Tipo.etiqueta)
-                        .foregroundStyle(Paleta.tinta)
-                        .padding(.horizontal, 12)
-                        .frame(minHeight: 44)
+            ViewThatFits(in: .horizontal) {
+                HStack(spacing: 8) {
+                    tituloMes
+                    Spacer()
+                    controles
                 }
-                flecha("chevron.left", "Semana anterior", -7)
-                flecha("chevron.right", "Semana siguiente", 7)
+                VStack(alignment: .leading, spacing: 8) {
+                    tituloMes
+                    HStack(spacing: 8) {
+                        controles
+                        Spacer()
+                    }
+                }
             }
-            HStack(spacing: 0) {
-                ForEach(Agenda.semana(de: seleccion), id: \.self) { d in
-                    celda(d)
+            if tamano.isAccessibilitySize {
+                // Con letra muy grande, los 7 días no caben: se desliza de lado y se centra el elegido.
+                ScrollViewReader { lector in
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 8) {
+                            ForEach(Agenda.semana(de: seleccion), id: \.self) { d in
+                                celda(d, ancho: 84).id(cal.startOfDay(for: d))
+                            }
+                        }
+                    }
+                    .onAppear { lector.scrollTo(cal.startOfDay(for: seleccion), anchor: .center) }
+                    .onChange(of: seleccion) { lector.scrollTo(cal.startOfDay(for: seleccion), anchor: .center) }
+                }
+            } else {
+                HStack(spacing: 0) {
+                    ForEach(Agenda.semana(de: seleccion), id: \.self) { d in
+                        celda(d)
+                    }
                 }
             }
         }
+    }
+
+    private var tituloMes: some View {
+        Text(seleccion.formatted(.dateTime.month(.wide).year().locale(Locale(identifier: "es_MX"))).capitalizedPrimera)
+            .font(Tipo.seccion)
+            .foregroundStyle(Paleta.tinta)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    @ViewBuilder private var controles: some View {
+        if !cal.isDate(seleccion, inSameDayAs: hoy) {
+            Button("Hoy") { withAnimation(.snappy) { seleccion = cal.startOfDay(for: hoy) } }
+                .font(Tipo.etiqueta)
+                .foregroundStyle(Paleta.tinta)
+                .padding(.horizontal, 12)
+                .frame(minHeight: 44)
+        }
+        flecha("chevron.left", "Semana anterior", -7)
+        flecha("chevron.right", "Semana siguiente", 7)
     }
 
     private func flecha(_ icono: String, _ etiqueta: String, _ dias: Int) -> some View {
@@ -163,7 +198,7 @@ struct CalendarioSemana: View {
         .accessibilityLabel(etiqueta)
     }
 
-    private func celda(_ d: Date) -> some View {
+    private func celda(_ d: Date, ancho: CGFloat? = nil) -> some View {
         let elegido = cal.isDate(d, inSameDayAs: seleccion)
         let esHoy = cal.isDate(d, inSameDayAs: hoy)
         let r = resumen(d)
@@ -172,12 +207,13 @@ struct CalendarioSemana: View {
         } label: {
             VStack(spacing: 8) {
                 Text(d.formatted(.dateTime.weekday(.narrow).locale(Locale(identifier: "es_MX"))).uppercased())
-                    .font(.caption.weight(.semibold))
+                    .font(.body.weight(.semibold))
                     .foregroundStyle(Paleta.tintaSuave)
                 Text(d.formatted(.dateTime.day()))
                     .font(.system(.title3, design: .serif, weight: .semibold))
                     .foregroundStyle(elegido ? Color.white : Paleta.tinta)
-                    .frame(width: 44, height: 44)
+                    .frame(width: lado, height: lado)
+                    .minimumScaleFactor(0.7)
                     .background {
                         if elegido {
                             Circle().fill(Paleta.marcaFuerte)
@@ -187,7 +223,7 @@ struct CalendarioSemana: View {
                     }
                 MarcaDia(resumen: r).frame(height: 8)
             }
-            .frame(maxWidth: .infinity, minHeight: 88)
+            .frame(minWidth: ancho, maxWidth: ancho ?? .infinity, minHeight: 88)
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)

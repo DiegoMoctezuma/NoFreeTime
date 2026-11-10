@@ -9,6 +9,96 @@ enum ClavesApp {
     static let permitirNube = "mimi.permitirNube.v2"
     /// La persona puede apagar la lectura con IA (HCAI: control). Sin IA, se agregan a mano.
     static let usarIA = "mimi.usarIA"
+    /// Tamaño de letra elegido en el onboarding o en Perfil (`TamanoLetra`).
+    static let tamanoLetra = "mimi.tamanoLetra"
+    /// Leer en voz alta cada tarjeta de "Tu plan" al aparecer.
+    static let leerEnVoz = "mimi.leerEnVoz"
+}
+
+// MARK: Tamaño de letra
+
+/// Tamaño de letra de la app. "Como en mi iPhone" respeta el ajuste del sistema;
+/// los demás lo fijan para toda la app (también en hojas y alertas de la app).
+enum TamanoLetra: String, CaseIterable, Identifiable {
+    case sistema, grande, masGrande, muyGrande
+
+    var id: String { rawValue }
+
+    var titulo: String {
+        switch self {
+        case .sistema: "Como en mi iPhone"
+        case .grande: "Grande"
+        case .masGrande: "Más grande"
+        case .muyGrande: "Muy grande"
+        }
+    }
+
+    /// nil = el del sistema.
+    var tamano: DynamicTypeSize? {
+        switch self {
+        case .sistema: nil
+        case .grande: .xxLarge
+        case .masGrande: .xxxLarge
+        case .muyGrande: .accessibility2
+        }
+    }
+
+    /// Tamaño con el que se muestra la opción en el selector (vista previa de sí misma).
+    var muestra: DynamicTypeSize {
+        tamano ?? DynamicTypeSize(UIApplication.shared.preferredContentSizeCategory) ?? .large
+    }
+}
+
+/// Aplica el tamaño elegido a toda la vista (se usa en la raíz de la app).
+struct AplicarTamanoLetra: ViewModifier {
+    @AppStorage(ClavesApp.tamanoLetra) private var raw = TamanoLetra.sistema.rawValue
+    /// El tamaño que eligió la persona en Ajustes del iPhone (se lee antes de aplicar el de MiMi).
+    @Environment(\.dynamicTypeSize) private var delSistema
+
+    func body(content: Content) -> some View {
+        // Siempre el mismo modificador. Si se alternara entre "con" y "sin" .dynamicTypeSize,
+        // SwiftUI reconstruiría toda la app y el onboarding regresaría al primer paso.
+        content.dynamicTypeSize(TamanoLetra(rawValue: raw)?.tamano ?? delSistema)
+    }
+}
+
+extension View {
+    func tamanoLetraElegido() -> some View { modifier(AplicarTamanoLetra()) }
+}
+
+/// Opciones de tamaño de letra; cada una se ve con su propio tamaño. Se usa en el onboarding y en Perfil.
+struct SelectorTamanoLetra: View {
+    @AppStorage(ClavesApp.tamanoLetra) private var raw = TamanoLetra.sistema.rawValue
+
+    var body: some View {
+        VStack(spacing: 12) {
+            ForEach(TamanoLetra.allCases) { opcion in
+                let elegido = raw == opcion.rawValue
+                Button {
+                    withAnimation(.snappy) { raw = opcion.rawValue }
+                } label: {
+                    HStack(spacing: 14) {
+                        RadioCoral(marcado: elegido)
+                        Text(opcion.titulo)
+                            .font(.body.weight(.semibold))
+                            .foregroundStyle(Paleta.tinta)
+                            .fixedSize(horizontal: false, vertical: true)
+                            .dynamicTypeSize(opcion.muestra)
+                        Spacer(minLength: 0)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity, minHeight: 64, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: Radio.control, style: .continuous).fill(Paleta.fondo))
+                    .overlay(RoundedRectangle(cornerRadius: Radio.control, style: .continuous)
+                        .strokeBorder(elegido ? Paleta.marcaFuerte : Paleta.borde, lineWidth: elegido ? 2 : 1.2))
+                    .contentShape(RoundedRectangle(cornerRadius: Radio.control, style: .continuous))
+                }
+                .buttonStyle(EstiloPresionable())
+                .accessibilityLabel("Letra \(opcion.titulo)")
+                .accessibilityAddTraits(elegido ? .isSelected : [])
+            }
+        }
+    }
 }
 
 // MARK: Tarjeta
@@ -30,9 +120,10 @@ extension View {
         modifier(EstiloTarjeta(relleno: relleno, color: color))
     }
 
-    /// Texto pequeño en mayúsculas con espacio entre letras ("PRÓXIMAS TOMAS").
+    /// Etiqueta de sección ("Te toca ahora"): tamaño de lectura normal, sin mayúsculas (cuestan más leer)
+    /// y en tinta, no en gris, porque muchas veces va sobre tarjetas pastel.
     func estiloMayusculas() -> some View {
-        self.font(Tipo.mayusculas).tracking(0.8).foregroundStyle(Paleta.tintaSuave).textCase(.uppercase)
+        self.font(Tipo.mayusculas).foregroundStyle(Paleta.tinta)
     }
 }
 
@@ -109,7 +200,7 @@ struct TarjetaOpcion: View {
                 VStack(alignment: .leading, spacing: 4) {
                     if let insignia {
                         Text(insignia)
-                            .font(.caption.weight(.bold))
+                            .font(.body.weight(.bold))
                             .foregroundStyle(Paleta.sobreAcento)
                             .padding(.horizontal, 10)
                             .padding(.vertical, 3)
@@ -165,7 +256,7 @@ struct RadioCoral: View {
             if marcado {
                 Circle().fill(Paleta.acento)
                 Image(systemName: "checkmark")
-                    .font(.footnote.weight(.bold))
+                    .font(.body.weight(.bold))
                     .foregroundStyle(Color.white)
             }
         }
@@ -316,20 +407,41 @@ struct FilaHora: View {
                     .foregroundStyle(Paleta.tinta)
             }
             if !tamanoLetra.isAccessibilitySize { Spacer(minLength: 8) }
-            DatePicker(momento.nombre, selection: fecha, displayedComponents: .hourAndMinute)
-                .labelsHidden()
-                .font(.title3)
+            // Botones grandes de −30 y +30 minutos: más fáciles que la rueda con temblor en las manos.
+            HStack(spacing: 10) {
+                botonCambio("minus", etiqueta: "Media hora antes", minutos: -30)
+                Text(horaTexto)
+                    .font(.system(.title3, weight: .semibold))
+                    .monospacedDigit()
+                    .foregroundStyle(Paleta.tinta)
+                    .frame(minWidth: 96)
+                    .contentTransition(.numericText())
+                    .accessibilityLabel("\(momento.nombre) a las \(horaTexto)")
+                botonCambio("plus", etiqueta: "Media hora después", minutos: 30)
+            }
         }
         .frame(minHeight: 56)
     }
 
-    private var fecha: Binding<Date> {
-        Binding {
-            Calendar.current.date(bySettingHour: minutos / 60, minute: minutos % 60, second: 0, of: .now) ?? .now
-        } set: { nueva in
-            let c = Calendar.current.dateComponents([.hour, .minute], from: nueva)
-            minutos = (c.hour ?? 0) * 60 + (c.minute ?? 0)
+    private var horaTexto: String {
+        let fecha = Calendar.current.date(bySettingHour: minutos / 60, minute: minutos % 60, second: 0, of: .now) ?? .now
+        return fecha.formatted(date: .omitted, time: .shortened)
+    }
+
+    private func botonCambio(_ icono: String, etiqueta: String, minutos delta: Int) -> some View {
+        Button { cambiar(delta) } label: {
+            Image(systemName: icono)
+                .font(.title3.weight(.bold))
+                .foregroundStyle(Paleta.tinta)
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Paleta.marcaSuave))
         }
+        .buttonStyle(EstiloPresionable())
+        .accessibilityLabel("\(etiqueta) para \(momento.nombre)")
+    }
+
+    private func cambiar(_ delta: Int) {
+        withAnimation(.snappy) { minutos = ((minutos + delta) % 1440 + 1440) % 1440 }
     }
 }
 

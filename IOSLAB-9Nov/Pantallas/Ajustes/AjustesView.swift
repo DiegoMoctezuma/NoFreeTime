@@ -28,6 +28,7 @@ private struct PerfilContenido: View {
     @AppStorage(ClavesApp.altaTerminada) private var altaTerminada = false
     @AppStorage(ClavesApp.usarIA) private var usarIA = true
     @AppStorage(ClavesApp.permitirNube) private var permitirNube = false
+    @AppStorage(ClavesApp.leerEnVoz) private var leerEnVoz = false
     @State private var confirmarEjemplo = false
     @State private var confirmarBorrar = false
     @State private var tareaReprogramar: Task<Void, Never>?
@@ -63,6 +64,28 @@ private struct PerfilContenido: View {
                         FilaHora(momento: .cena, minutos: $perfil.cenaMin)
                         Divider().padding(.vertical, 8)
                         FilaHora(momento: .dormir, minutos: $perfil.dormirMin)
+                    }
+                    .padding(18)
+                    .overlay(RoundedRectangle(cornerRadius: Radio.tarjeta, style: .continuous).strokeBorder(Paleta.borde, lineWidth: 1.2))
+                }
+
+                seccion("Tamaño de letra", nota: "Cambia el tamaño en toda la app.") {
+                    SelectorTamanoLetra()
+                }
+
+                seccion("Leer en voz alta") {
+                    VStack(alignment: .leading, spacing: 10) {
+                        Toggle(isOn: $leerEnVoz) {
+                            Text("Leer cada medicina cuando reviso una receta")
+                                .font(Tipo.etiqueta)
+                                .foregroundStyle(Paleta.tinta)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
+                        .tint(Paleta.acento)
+                        Text("Siempre puedes tocar la bocina para que te lea una tarjeta.")
+                            .font(.body)
+                            .foregroundStyle(Paleta.tinta)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     .padding(18)
                     .overlay(RoundedRectangle(cornerRadius: Radio.tarjeta, style: .continuous).strokeBorder(Paleta.borde, lineWidth: 1.2))
@@ -218,6 +241,7 @@ private struct PerfilContenido: View {
                 .accessibilityAddTraits(.isHeader)
             if let nota {
                 Text(nota).font(.body).foregroundStyle(Paleta.tintaSuave)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             contenido()
         }

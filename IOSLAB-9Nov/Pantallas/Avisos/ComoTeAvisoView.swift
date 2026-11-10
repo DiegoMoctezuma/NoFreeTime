@@ -73,7 +73,7 @@ struct ComoTeAvisoView: View {
                         .font(Tipo.tarjeta)
                         .foregroundStyle(Paleta.tinta)
                     Text(med.nombreTecnico)
-                        .font(.subheadline)
+                        .font(.body)
                         .foregroundStyle(Paleta.tintaSuave)
                 }
             }
